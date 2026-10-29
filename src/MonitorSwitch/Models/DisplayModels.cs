@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using MonitorSwitch.I18n;
 using MonitorSwitch.Interop;
 
 namespace MonitorSwitch.Models;
@@ -93,9 +94,9 @@ public sealed class DisplayProfile
             var act = Monitors.Where(m => m.Active).ToList();
             return act.Count switch
             {
-                0 => "空配置",
-                1 => $"1 台显示器 · {act[0].ResolutionText} @ {FormatHz(act[0].RefreshHz)}",
-                _ => $"{act.Count} 台显示器 · {act[0].ResolutionText} 等",
+                0 => Strings.T("Profiles.SummaryEmpty"),
+                1 => Strings.F("Profiles.SummaryOne", act[0].ResolutionText, FormatHz(act[0].RefreshHz)),
+                _ => Strings.F("Profiles.SummaryMany", act.Count, act[0].ResolutionText),
             };
         }
     }
@@ -166,25 +167,27 @@ public sealed class LiveDisplay
     public uint VSyncNum { get; set; }
     public uint VSyncDen { get; set; } = 1;
 
-    public string DisplayName => string.IsNullOrWhiteSpace(MonitorName) ? $"显示器 {Number}" : MonitorName;
+    public string DisplayName => string.IsNullOrWhiteSpace(MonitorName)
+        ? Strings.F("Display.NameFormat", Number)
+        : MonitorName;
 
     public string ConnectorName => Connector switch
     {
-        0 => "HD15 (VGA)",
-        4 => "DVI",
-        5 => "HDMI",
-        6 => "LVDS",
-        10 or 11 => "DisplayPort",
-        12 or 13 => "UDI",
-        14 => "SDTV",
-        15 => "Miracast",
-        1 => "S-Video",
-        2 => "Composite",
-        3 => "Component",
-        8 => "D-Jpn",
-        9 => "SDI",
-        16 => "内置显示屏",
-        _ => "其他",
+        0 => Strings.T("Display.Connector.Vga"),
+        4 => Strings.T("Display.Connector.Dvi"),
+        5 => Strings.T("Display.Connector.Hdmi"),
+        6 => Strings.T("Display.Connector.Lvds"),
+        10 or 11 => Strings.T("Display.Connector.DisplayPort"),
+        12 or 13 => Strings.T("Display.Connector.Udi"),
+        14 => Strings.T("Display.Connector.Sdtv"),
+        15 => Strings.T("Display.Connector.Miracast"),
+        1 => Strings.T("Display.Connector.SVideo"),
+        2 => Strings.T("Display.Connector.Composite"),
+        3 => Strings.T("Display.Connector.Component"),
+        8 => Strings.T("Display.Connector.DJpn"),
+        9 => Strings.T("Display.Connector.Sdi"),
+        16 => Strings.T("Display.Connector.Internal"),
+        _ => Strings.T("Display.Connector.Other"),
     };
 
     public string ResolutionText => $"{W} × {H}";

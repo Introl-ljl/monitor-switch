@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using MonitorSwitch.I18n;
 using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
@@ -27,6 +28,12 @@ public partial class SettingsPage : Page
             {
                 "Light" => 1,
                 "Dark" => 2,
+                _ => 0,
+            };
+            LanguageCombo.SelectedIndex = s.Language switch
+            {
+                "en" => 1,
+                "zh-CN" => 2,
                 _ => 0,
             };
             AutoStartToggle.IsChecked = AutoStartService.IsEnabled();
@@ -58,6 +65,16 @@ public partial class SettingsPage : Page
         FlashSaved();
     }
 
+    private void OnLanguageChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        var lang = LanguageCombo.SelectedIndex switch { 1 => "en", 2 => "zh-CN", _ => "auto" };
+        // 设置变更会经由 SettingsService.SettingsChanged -> App.OnSettingsChanged
+        // 触发 Localization.Apply，索引器绑定随即刷新，无需重启。
+        SettingsService.Instance.Update(s => s.Language = lang);
+        FlashSaved();
+    }
+
     private void OnAutoStartToggled(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
@@ -69,7 +86,7 @@ public partial class SettingsPage : Page
         _loading = false;
         if (!ok)
         {
-            ShowSaved("无法修改开机自启动，可能被安全软件拦截。", true);
+            ShowSaved(Strings.T("Settings.AutoStartFailed"), true);
             return;
         }
         FlashSaved();
@@ -88,7 +105,7 @@ public partial class SettingsPage : Page
     private void ShowSaved(string message, bool error)
     {
         SavedBar.Severity = error ? Wpf.Ui.Controls.InfoBarSeverity.Error : Wpf.Ui.Controls.InfoBarSeverity.Success;
-        SavedBar.Title = error ? "操作失败" : "已保存";
+        SavedBar.Title = error ? Strings.T("Result.Failed") : Strings.T("Settings.Saved");
         SavedBar.Message = message;
         SavedBar.IsOpen = true;
     }

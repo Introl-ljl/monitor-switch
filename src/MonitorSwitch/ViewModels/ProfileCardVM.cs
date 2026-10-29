@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using MonitorSwitch.I18n;
 using System.Runtime.CompilerServices;
 using MonitorSwitch.Controls;
 using MonitorSwitch.Models;
@@ -21,7 +22,7 @@ public sealed class ProfileCardVM : INotifyPropertyChanged
 
     public string Name => Profile.Name;
     public string Summary => Profile.Summary;
-    public string HotkeyText => string.IsNullOrWhiteSpace(Profile.Hotkey) ? "未设置快捷键" : $"快捷键 {Profile.Hotkey}";
+    public string HotkeyText => string.IsNullOrWhiteSpace(Profile.Hotkey) ? Strings.T("Profiles.NoHotkeyBadge") : Strings.F("Profiles.HotkeyBadge", Profile.Hotkey);
 
     /// <summary>托盘面板里只显示按键组合本身；空字符串表示未设置（用于隐藏标签）。</summary>
     public string ShortHotkey => Profile.Hotkey ?? "";

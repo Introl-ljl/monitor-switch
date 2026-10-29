@@ -4,6 +4,10 @@ public sealed class AppSettings
 {
     /// <summary>Auto / Light / Dark</summary>
     public string Theme { get; set; } = "Auto";
+
+    /// <summary>界面语言：auto（跟随系统）/ en / zh-CN。</summary>
+    public string Language { get; set; } = "auto";
+
     public bool StartMinimized { get; set; }
     public bool CloseToTray { get; set; } = true;
     /// <summary>应用配置后显示“保留 / 还原”确认，15 秒后自动还原。</summary>

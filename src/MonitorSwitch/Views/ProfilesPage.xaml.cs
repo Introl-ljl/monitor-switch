@@ -1,4 +1,5 @@
 using System.IO;
+using MonitorSwitch.I18n;
 using System.Text.Json;
 using System.Text.Encodings.Web;
 using System.Windows;
@@ -130,13 +131,13 @@ public partial class ProfilesPage : Page
             var profile = DisplayService.Instance.CaptureCurrent();
             if (profile.Monitors.Count == 0)
             {
-                ShowResult(false, "未检测到显示器，无法创建模板。", null);
+                ShowResult(false, Strings.T("Msg.NoDisplayForProfile"), null);
                 return;
             }
             profile.Name = NextProfileName();
             profile.ModifiedAt = DateTime.Now;
             ProfileStore.Instance.Add(profile);
-            ShowResult(true, null, null, "已保存为“" + profile.Name + "”。");
+            ShowResult(true, null, null, Strings.F("Msg.ProfileSaved", profile.Name));
         }
         catch (Exception ex)
         {
@@ -148,8 +149,8 @@ public partial class ProfilesPage : Page
     private static string NextProfileName()
     {
         int i = ProfileStore.Instance.Profiles.Count + 1;
-        while (ProfileStore.Instance.Profiles.Any(p => p.Name == $"配置 {i}")) i++;
-        return $"配置 {i}";
+        while (ProfileStore.Instance.Profiles.Any(p => p.Name == Strings.F("Profiles.DefaultName", i))) i++;
+        return Strings.F("Profiles.DefaultName", i);
     }
 
     // ---------------------------------------------------------------- 重命名
@@ -247,7 +248,7 @@ public partial class ProfilesPage : Page
         var normalized = string.IsNullOrWhiteSpace(hotkey) ? null : hotkey.Trim();
         if (normalized != null && !HotkeyService.TryParse(normalized, out _, out _))
         {
-            ShowResult(false, $"无法识别的快捷键：{normalized}（支持 Ctrl/Alt/Shift/Win + 数字、字母或 F1-F24）", null);
+            ShowResult(false, Strings.F("Msg.HotkeyInvalid", normalized), null);
             Rebuild();
             return;
         }
@@ -260,7 +261,7 @@ public partial class ProfilesPage : Page
                                      string.Equals(p.Hotkey, normalized, StringComparison.OrdinalIgnoreCase));
             if (conflict != null)
             {
-                ShowResult(false, $"快捷键 {normalized} 已被“{conflict.Name}”占用。", null);
+                ShowResult(false, Strings.F("Msg.HotkeyConflict", normalized, conflict.Name), null);
                 Rebuild();
                 return;
             }
@@ -276,8 +277,8 @@ public partial class ProfilesPage : Page
         vm.Profile.ModifiedAt = DateTime.Now;
         ProfileStore.Instance.Touch();
         ShowResult(true, null, null, normalized == null
-            ? $"已清除“{vm.Profile.Name}”的快捷键。"
-            : $"已绑定 {normalized}（注册失败时会写入日志）。");
+            ? Strings.F("Msg.HotkeyCleared", vm.Profile.Name)
+            : Strings.F("Msg.HotkeyBound", normalized));
     }
 
     // ---------------------------------------------------------------- 删除
@@ -286,14 +287,14 @@ public partial class ProfilesPage : Page
     {
         if (sender is not FrameworkElement { Tag: ProfileCardVM vm }) return;
         var answer = System.Windows.MessageBox.Show(
-            $"确定删除模板“{vm.Profile.Name}”吗？此操作不可撤销。",
-            "删除模板",
+            Strings.F("Msg.DeleteConfirm", vm.Profile.Name),
+            Strings.T("Msg.DeleteTitle"),
             MessageBoxButton.YesNo,
             MessageBoxImage.Question);
         if (answer != MessageBoxResult.Yes) return;
 
         ProfileStore.Instance.Remove(vm.Profile.Id);
-        ShowResult(true, null, null, $"已删除“{vm.Profile.Name}”。");
+        ShowResult(true, null, null, Strings.F("Msg.ProfileDeleted", vm.Profile.Name));
         Rebuild();
     }
 
@@ -303,14 +304,14 @@ public partial class ProfilesPage : Page
     {
         if (ProfileStore.Instance.Profiles.Count == 0)
         {
-            ShowResult(false, "还没有可导出的模板。", null);
+            ShowResult(false, Strings.T("Msg.NothingToExport"), null);
             return;
         }
 
         var dlg = new SaveFileDialog
         {
-            Title = "导出配置模板",
-            Filter = "JSON 文件|*.json",
+            Title = Strings.T("Msg.ExportTitle"),
+            Filter = Strings.T("Msg.JsonFilter"),
             FileName = "monitorswitch-templates.json",
         };
         if (dlg.ShowDialog() != true) return;
@@ -322,11 +323,11 @@ public partial class ProfilesPage : Page
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             });
             File.WriteAllText(dlg.FileName, json);
-            ShowResult(true, null, null, $"已导出 {ProfileStore.Instance.Profiles.Count} 份模板。");
+            ShowResult(true, null, null, Strings.F("Msg.ExportDone", ProfileStore.Instance.Profiles.Count));
         }
         catch (Exception ex)
         {
-            ShowResult(false, "导出失败：" + ex.Message, null);
+            ShowResult(false, Strings.F("Msg.ExportFailed", ex.Message), null);
         }
     }
 
@@ -334,8 +335,8 @@ public partial class ProfilesPage : Page
     {
         var dlg = new OpenFileDialog
         {
-            Title = "导入配置模板",
-            Filter = "JSON 文件|*.json",
+            Title = Strings.T("Msg.ImportTitle"),
+            Filter = Strings.T("Msg.JsonFilter"),
         };
         if (dlg.ShowDialog() != true) return;
         try
@@ -343,7 +344,7 @@ public partial class ProfilesPage : Page
             var list = JsonSerializer.Deserialize<List<DisplayProfile>>(File.ReadAllText(dlg.FileName));
             if (list == null || list.Count == 0)
             {
-                ShowResult(false, "文件中没有可导入的模板。", null);
+                ShowResult(false, Strings.T("Msg.NothingToImport"), null);
                 return;
             }
 
@@ -374,20 +375,20 @@ public partial class ProfilesPage : Page
 
             if (added == 0)
             {
-                ShowResult(false, "文件中的模板均不可用（缺少显示器数据）。", null);
+                ShowResult(false, Strings.T("Msg.ImportAllInvalid"), null);
                 return;
             }
 
             ProfileStore.Instance.Touch();
 
-            var msg = $"已导入 {added} 份模板。";
-            if (skipped > 0) msg += $"跳过 {skipped} 份无效数据。";
-            if (hotkeysDropped > 0) msg += $"{hotkeysDropped} 份模板的快捷键与本机冲突，已清除，可手动重新绑定。";
+            var msg = Strings.F("Msg.ImportDone", added);
+            if (skipped > 0) msg += Strings.F("Msg.ImportSkipped", skipped);
+            if (hotkeysDropped > 0) msg += Strings.F("Msg.ImportHotkeysDropped", hotkeysDropped);
             ShowResult(true, null, null, msg);
         }
         catch (Exception ex)
         {
-            ShowResult(false, "导入失败：" + ex.Message, null);
+            ShowResult(false, Strings.F("Msg.ImportFailed", ex.Message), null);
         }
     }
 
@@ -410,20 +411,20 @@ public partial class ProfilesPage : Page
         if (!success)
         {
             ResultBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Error;
-            ResultBar.Title = "操作失败";
-            ResultBar.Message = error ?? "未知错误";
+            ResultBar.Title = Strings.T("Result.Failed");
+            ResultBar.Message = error ?? Strings.T("Common.UnknownError");
             return;
         }
         if (warnings is { Count: > 0 })
         {
             ResultBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Warning;
-            ResultBar.Title = "已应用（部分设置未生效）";
+            ResultBar.Title = Strings.T("Result.AppliedPartial");
             ResultBar.Message = string.Join(" ", warnings);
         }
         else
         {
             ResultBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Success;
-            ResultBar.Title = "完成";
+            ResultBar.Title = Strings.T("Result.Done");
             ResultBar.Message = successMessage ?? string.Empty;
         }
     }

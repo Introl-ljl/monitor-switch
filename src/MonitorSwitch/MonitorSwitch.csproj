@@ -29,4 +29,15 @@
     <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- 界面文案。用 WPF 的 Resource（而非 EmbeddedResource）：
+         本项目是 UseWPF=true，SDK 的资源管线会把 EmbeddedResource 交给 WPF 的
+         .g.resources 生成器，JSON 会被静默丢弃（实测组件清单里只剩 g.resources）。
+         改用 Resource 后可通过 Application.GetResourceStream 按 pack URI 读取。 -->
+    <None Remove="I18n\strings.en.json" />
+    <None Remove="I18n\strings.zh-CN.json" />
+    <Resource Include="I18n\strings.en.json" />
+    <Resource Include="I18n\strings.zh-CN.json" />
+  </ItemGroup>
+
 </Project>

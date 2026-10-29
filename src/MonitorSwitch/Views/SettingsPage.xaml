@@ -2,6 +2,7 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:i18n="clr-namespace:MonitorSwitch.I18n"
       TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- 滚动由 NavigationView 的 DynamicScrollViewer 负责，这里不要再套 ScrollViewer。
@@ -18,33 +19,55 @@
 
         <StackPanel Grid.Column="0" Margin="36,20,36,36">
 
-        <TextBlock Text="设置" Style="{StaticResource PageTitle}" />
-        <TextBlock Text="个性化 MonitorSwitch 的行为。" Style="{StaticResource PageSubtitle}" Margin="0,2,0,14" />
+        <TextBlock Text="{Binding [Settings.Title], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource PageTitle}" />
+        <TextBlock Text="{Binding [Settings.Subtitle], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource PageSubtitle}" Margin="0,2,0,14" />
 
         <ui:InfoBar x:Name="SavedBar" IsOpen="False" IsClosable="True" Severity="Success"
-                    Title="已保存" Message="设置已即时生效。" Margin="0,0,0,14" />
+                    Title="{Binding [Settings.Saved], Source={x:Static i18n:Localization.Instance}}"
+                    Message="{Binding [Settings.SavedMsg], Source={x:Static i18n:Localization.Instance}}" Margin="0,0,0,14" />
 
-        <TextBlock Text="外观" Style="{StaticResource SectionHeader}" />
+        <TextBlock Text="{Binding [Settings.SectionAppearance], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SectionHeader}" />
         <Border Style="{StaticResource CardBorder}" Padding="0">
+            <StackPanel>
             <Grid Style="{StaticResource SettingRow}" Margin="18,10,18,10">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
                 <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                    <TextBlock Text="应用主题" Style="{StaticResource SettingTitle}" />
-                    <TextBlock Text="选择浅色、深色或跟随 Windows 系统" Style="{StaticResource SettingDesc}" />
+                    <TextBlock Text="{Binding [Settings.Theme], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                    <TextBlock Text="{Binding [Settings.ThemeDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                 </StackPanel>
                 <ComboBox x:Name="ThemeCombo" Grid.Column="1" MinWidth="150" VerticalAlignment="Center"
                           SelectionChanged="OnThemeChanged">
-                    <ComboBoxItem Content="跟随系统" />
-                    <ComboBoxItem Content="浅色" />
-                    <ComboBoxItem Content="深色" />
+                    <ComboBoxItem Content="{Binding [Settings.ThemeAuto], Source={x:Static i18n:Localization.Instance}}" />
+                    <ComboBoxItem Content="{Binding [Settings.ThemeLight], Source={x:Static i18n:Localization.Instance}}" />
+                    <ComboBoxItem Content="{Binding [Settings.ThemeDark], Source={x:Static i18n:Localization.Instance}}" />
                 </ComboBox>
             </Grid>
+
+            <Border Style="{StaticResource SettingDivider}" />
+
+            <Grid Style="{StaticResource SettingRow}" Margin="18,10,18,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding [Settings.Language], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                    <TextBlock Text="{Binding [Settings.LanguageDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
+                </StackPanel>
+                <ComboBox x:Name="LanguageCombo" Grid.Column="1" MinWidth="150" VerticalAlignment="Center"
+                          SelectionChanged="OnLanguageChanged">
+                    <ComboBoxItem Content="{Binding [Settings.LanguageAuto], Source={x:Static i18n:Localization.Instance}}" />
+                    <ComboBoxItem Content="English" />
+                    <ComboBoxItem Content="简体中文" />
+                </ComboBox>
+            </Grid>
+            </StackPanel>
         </Border>
 
-        <TextBlock Text="启动" Style="{StaticResource SectionHeader}" Margin="2,20,0,8" />
+        <TextBlock Text="{Binding [Settings.SectionStartup], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SectionHeader}" Margin="2,20,0,8" />
         <Border Style="{StaticResource CardBorder}" Padding="0,4,0,4">
             <StackPanel>
                 <Grid Style="{StaticResource SettingRow}" Margin="18,10,18,10">
@@ -53,8 +76,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="开机时启动 MonitorSwitch" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="登录 Windows 后自动在后台运行" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Settings.AutoStart], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Settings.AutoStartDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ui:ToggleSwitch x:Name="AutoStartToggle" Grid.Column="1" VerticalAlignment="Center"
                                      Checked="OnAutoStartToggled" Unchecked="OnAutoStartToggled" />
@@ -66,8 +89,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="启动时最小化到托盘" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="不显示主窗口，直接驻留在系统托盘" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Settings.StartMinimized], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Settings.StartMinimizedDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ui:ToggleSwitch x:Name="StartMinimizedToggle" Grid.Column="1" VerticalAlignment="Center"
                                      Checked="OnStartMinimizedToggled" Unchecked="OnStartMinimizedToggled" />
@@ -79,8 +102,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="关闭窗口时最小化到托盘" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="关闭主窗口后程序继续在托盘中运行" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Settings.CloseToTray], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Settings.CloseToTrayDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ui:ToggleSwitch x:Name="CloseToTrayToggle" Grid.Column="1" VerticalAlignment="Center"
                                      Checked="OnCloseToTrayToggled" Unchecked="OnCloseToTrayToggled" />
@@ -88,7 +111,7 @@
             </StackPanel>
         </Border>
 
-        <TextBlock Text="应用模板" Style="{StaticResource SectionHeader}" Margin="2,20,0,8" />
+        <TextBlock Text="{Binding [Settings.SectionApply], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SectionHeader}" Margin="2,20,0,8" />
         <Border Style="{StaticResource CardBorder}" Padding="0,4,0,4">
             <StackPanel>
                 <Grid Style="{StaticResource SettingRow}" Margin="18,10,18,10">
@@ -97,8 +120,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="应用后显示保留确认" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="与 Windows 一致：15 秒内未确认则自动还原到之前的配置" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Settings.RevertGuard], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Settings.RevertGuardDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ui:ToggleSwitch x:Name="RevertGuardToggle" Grid.Column="1" VerticalAlignment="Center"
                                      Checked="OnRevertGuardToggled" Unchecked="OnRevertGuardToggled" />
@@ -110,16 +133,16 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="数据目录" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Settings.DataDir], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
                         <TextBlock x:Name="DataDirText" Style="{StaticResource SettingDesc}" TextTrimming="CharacterEllipsis" />
                     </StackPanel>
-                    <ui:Button Grid.Column="1" Content="打开" Appearance="Secondary" MinWidth="72"
+                    <ui:Button Grid.Column="1" Content="{Binding [Common.Open], Source={x:Static i18n:Localization.Instance}}" Appearance="Secondary" MinWidth="72"
                                VerticalAlignment="Center" Click="OnOpenDataDir" />
                 </Grid>
             </StackPanel>
         </Border>
 
-        <TextBlock Text="关于" Style="{StaticResource SectionHeader}" Margin="2,20,0,8" />
+        <TextBlock Text="{Binding [Settings.SectionAbout], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SectionHeader}" Margin="2,20,0,8" />
         <Border Style="{StaticResource CardBorder}" Padding="0,4,0,4">
             <StackPanel>
                 <Grid Style="{StaticResource SettingRow}" Margin="18,10,18,10">
@@ -128,16 +151,16 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
-                        <TextBlock Text="MonitorSwitch 显示器助手" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Settings.AboutName], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
                         <TextBlock Style="{StaticResource SettingDesc}" Margin="0,2,0,0"
-                                   Text="基于 Windows CCD API 的轻量显示器配置切换工具" />
+                                   Text="{Binding [Settings.AboutDesc], Source={x:Static i18n:Localization.Instance}}" />
                     </StackPanel>
                     <TextBlock x:Name="VersionText" Grid.Column="1" Text="v1.0.0"
                                VerticalAlignment="Center" Style="{StaticResource SettingDesc}" />
                 </Grid>
                 <Border Style="{StaticResource SettingDivider}" />
                 <TextBlock Margin="18,10,18,10" Style="{StaticResource SettingDesc}"
-                           Text="参考项目：davide136/monswitch · terrymacdonald/DisplayMagician" />
+                           Text="{Binding [Settings.Credits], Source={x:Static i18n:Localization.Instance}}" />
             </StackPanel>
         </Border>
         </StackPanel>

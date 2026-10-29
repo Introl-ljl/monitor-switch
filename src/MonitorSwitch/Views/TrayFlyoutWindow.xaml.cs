@@ -1,4 +1,5 @@
 using System.Windows;
+using MonitorSwitch.I18n;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
 using MonitorSwitch.Interop;
@@ -184,7 +185,7 @@ public partial class TrayFlyoutWindow : FluentWindow
         catch (Exception ex)
         {
             AppPaths.Log("托盘面板刷新失败: " + ex);
-            ShowError("读取显示器信息失败：" + ex.Message);
+            ShowError(Strings.F("Msg.ReadDisplaysFailed", ex.Message));
         }
     }
 
@@ -316,7 +317,7 @@ public partial class TrayFlyoutWindow : FluentWindow
             if (!result.Success)
             {
                 AppPaths.Log("托盘应用失败: " + result.ErrorMessage);
-                ShowError("应用“" + vm.Profile.Name + "”失败：" + result.ErrorMessage);
+                ShowError(Strings.F("Msg.ApplyFailed", vm.Profile.Name, result.ErrorMessage));
                 return;
             }
             HideWithFade();
@@ -324,7 +325,7 @@ public partial class TrayFlyoutWindow : FluentWindow
         catch (Exception ex)
         {
             AppPaths.Log("托盘应用异常: " + ex);
-            ShowError("应用失败：" + ex.Message);
+            ShowError(Strings.F("Msg.ApplyFailed", vm.Profile.Name, ex.Message));
         }
         finally
         {
@@ -339,12 +340,12 @@ public partial class TrayFlyoutWindow : FluentWindow
             var profile = DisplayService.Instance.CaptureCurrent();
             if (profile.Monitors.Count == 0)
             {
-                ShowError("未检测到显示器，无法创建模板。");
+                ShowError(Strings.T("Msg.NoDisplayForProfile"));
                 return;
             }
             int i = ProfileStore.Instance.Profiles.Count + 1;
-            while (ProfileStore.Instance.Profiles.Any(p => p.Name == $"配置 {i}")) i++;
-            profile.Name = $"配置 {i}";
+            while (ProfileStore.Instance.Profiles.Any(p => p.Name == Strings.F("Profiles.DefaultName", i))) i++;
+            profile.Name = Strings.F("Profiles.DefaultName", i);
             ProfileStore.Instance.Add(profile);
             RefreshContent();
         }
@@ -380,7 +381,7 @@ public partial class TrayFlyoutWindow : FluentWindow
             if (!result.Success)
             {
                 AppPaths.Log("托盘投影切换失败: " + result.ErrorMessage);
-                ShowError("切换投影模式失败：" + result.ErrorMessage);
+                ShowError(Strings.F("Apply.TopologyFailed", result.ErrorMessage));
                 return;
             }
             HideWithFade();
@@ -388,7 +389,7 @@ public partial class TrayFlyoutWindow : FluentWindow
         catch (Exception ex)
         {
             AppPaths.Log("托盘投影切换异常: " + ex);
-            ShowError("切换失败：" + ex.Message);
+            ShowError(Strings.F("Apply.TopologyFailed", ex.Message));
         }
         finally
         {
@@ -398,7 +399,7 @@ public partial class TrayFlyoutWindow : FluentWindow
 
     private void ShowError(string message)
     {
-        ErrorBar.Title = "操作失败";
+        ErrorBar.Title = Strings.T("Result.Failed");
         ErrorBar.Message = message;
         ErrorBar.IsOpen = true;
     }

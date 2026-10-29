@@ -1,4 +1,5 @@
 using System.IO;
+using MonitorSwitch.I18n;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using MonitorSwitch.Models;
@@ -52,7 +53,7 @@ public sealed class ProfileStore
             foreach (var p in Profiles)
             {
                 if (string.IsNullOrWhiteSpace(p.Id)) p.Id = Guid.NewGuid().ToString("N");
-                if (string.IsNullOrWhiteSpace(p.Name)) p.Name = "未命名配置";
+                if (string.IsNullOrWhiteSpace(p.Name)) p.Name = Strings.T("Profiles.Unnamed");
             }
             return;
         }

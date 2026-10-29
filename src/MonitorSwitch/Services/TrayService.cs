@@ -29,6 +29,14 @@ public sealed class TrayService : IDisposable
         if (!_added) AppPaths.Log("托盘图标添加失败");
     }
 
+    /// <summary>更新托盘提示文字（切换语言后调用）。</summary>
+    public void SetTip(string tip)
+    {
+        if (!_added) return;
+        _nid.SzTip = tip;
+        ShellNative.Shell_NotifyIcon(ShellNative.NIM_MODIFY, ref _nid);
+    }
+
     public void OnTrayMessage(int msg)
     {
         switch (msg)

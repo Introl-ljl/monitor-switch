@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using MonitorSwitch.I18n;
 
 namespace MonitorSwitch.Interop;
 
@@ -511,13 +512,13 @@ public static class CcdNative
 
     public static string DescribeError(int hr) => hr switch
     {
-        ERROR_SUCCESS => "成功",
-        87 => "参数无效 (0x57)",
-        50 => "系统未运行 WDDM 显示驱动 (0x32)",
-        5 => "无法访问当前桌面会话 (0x5)",
-        31 => "系统发生了常规故障 (0x1F)",
-        1610 => "找不到可用的源/目标模式组合 (0x64A)",
-        ERROR_INSUFFICIENT_BUFFER => "缓冲区不足 (0x7A)",
-        _ => $"错误代码 0x{hr:X8}"
+        ERROR_SUCCESS => "Success",
+        87 => Strings.T("Error.ArgInvalid"),
+        50 => Strings.T("Error.NoWddm"),
+        5 => Strings.T("Error.SessionAccess"),
+        31 => Strings.T("Error.GenericFailure"),
+        1610 => Strings.T("Error.NoModeCombination"),
+        ERROR_INSUFFICIENT_BUFFER => Strings.T("Error.InsufficientBuffer"),
+        _ => Strings.F("Error.CodeFormat", hr.ToString("X8"))
     };
 }

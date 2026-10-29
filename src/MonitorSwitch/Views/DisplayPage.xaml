@@ -3,6 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:controls="clr-namespace:MonitorSwitch.Controls"
+      xmlns:i18n="clr-namespace:MonitorSwitch.I18n"
       TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- 不要在这里再套一层 ScrollViewer。
@@ -22,8 +23,8 @@
 
         <StackPanel Grid.Column="0" Margin="36,20,36,36">
 
-        <TextBlock Text="显示器" Style="{StaticResource PageTitle}" />
-        <TextBlock Text="排列显示器、调整分辨率与刷新率，并将整套配置保存为模板。"
+        <TextBlock Text="{Binding [Display.Title], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource PageTitle}" />
+        <TextBlock Text="{Binding [Display.Subtitle], Source={x:Static i18n:Localization.Instance}}"
                    Style="{StaticResource PageSubtitle}" Margin="0,2,0,14" />
 
         <ui:InfoBar x:Name="ResultBar" IsOpen="False" IsClosable="True" Margin="0,0,0,14" />
@@ -45,14 +46,14 @@
                              VerticalAlignment="Center" Margin="0,0,10,0"
                              Foreground="{DynamicResource SystemAccentColorBrush}" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="有尚未应用的更改" Style="{StaticResource SettingTitle}" />
+                    <TextBlock Text="{Binding [Display.Pending.Title], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
                     <TextBlock x:Name="PendingDesc" Style="{StaticResource SettingDesc}"
-                               Text="点击“应用”后生效，或点击“撤销”恢复为当前配置。" />
+                               Text="{Binding [Display.Pending.Desc], Source={x:Static i18n:Localization.Instance}}" />
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                    <ui:Button Content="应用" Appearance="Primary" MinWidth="80"
+                    <ui:Button Content="{Binding [Display.Pending.Apply], Source={x:Static i18n:Localization.Instance}}" Appearance="Primary" MinWidth="80"
                                Click="OnApplyPending" />
-                    <ui:Button Content="撤销" Appearance="Secondary" MinWidth="72" Margin="8,0,0,0"
+                    <ui:Button Content="{Binding [Display.Pending.Discard], Source={x:Static i18n:Localization.Instance}}" Appearance="Secondary" MinWidth="72" Margin="8,0,0,0"
                                Click="OnDiscardPending" />
                 </StackPanel>
             </Grid>
@@ -64,19 +65,19 @@
                 <controls:DisplayArrangeCanvas x:Name="ArrangeCanvas" Height="280" Margin="4,2,4,0" />
                 <Grid Margin="8,8,8,2">
                     <StackPanel Orientation="Horizontal">
-                        <ui:Button Content="标识" Appearance="Secondary" MinWidth="80" Click="OnIdentify" />
-                        <ui:Button Content="重新检测" MinWidth="80" Margin="8,0,0,0" Appearance="Secondary" Click="OnDetect" />
+                        <ui:Button Content="{Binding [Display.Identify], Source={x:Static i18n:Localization.Instance}}" Appearance="Secondary" MinWidth="80" Click="OnIdentify" />
+                        <ui:Button Content="{Binding [Display.Redetect], Source={x:Static i18n:Localization.Instance}}" MinWidth="80" Margin="8,0,0,0" Appearance="Secondary" Click="OnDetect" />
                     </StackPanel>
                     <TextBlock HorizontalAlignment="Right" VerticalAlignment="Center"
                                Style="{StaticResource SettingDesc}"
                                TextTrimming="CharacterEllipsis"
-                               Text="拖动调整排列 · 底部色条为主显示器" />
+                               Text="{Binding [Display.ArrangeHint], Source={x:Static i18n:Localization.Instance}}" />
                 </Grid>
             </StackPanel>
         </Border>
 
         <!-- 选择显示器 -->
-        <TextBlock Text="选择要更改的显示器" Style="{StaticResource SettingTitle}" Margin="2,22,0,8" />
+        <TextBlock Text="{Binding [Display.SelectLabel], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" Margin="2,22,0,8" />
         <ComboBox x:Name="MonitorSelector" MinWidth="420" MaxWidth="480" HorizontalAlignment="Left"
                   SelectionChanged="OnMonitorSelected" Margin="0,0,0,14" />
 
@@ -88,7 +89,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="MonitorNameText" FontSize="16" FontWeight="Normal" />
                             <Border x:Name="PrimaryBadge" Style="{StaticResource Chip}" Margin="8,0,0,0">
-                                <TextBlock Text="主显示器" Style="{StaticResource ChipText}" />
+                                <TextBlock Text="{Binding [Display.PrimaryBadge], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource ChipText}" />
                             </Border>
                         </StackPanel>
                         <TextBlock x:Name="MonitorSubText" Style="{StaticResource SettingDesc}" Margin="0,3,0,0" />
@@ -103,8 +104,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0">
-                        <TextBlock Text="分辨率" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="更改此显示器的像素尺寸" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Display.Resolution], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Display.ResolutionDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ComboBox x:Name="ResCombo" Grid.Column="1" MinWidth="190"
                               VerticalAlignment="Center" SelectionChanged="OnResChanged" />
@@ -117,8 +118,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0">
-                        <TextBlock Text="刷新率" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="更高的刷新率画面更流畅" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Display.RefreshRate], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Display.RefreshRateDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ComboBox x:Name="RefreshCombo" Grid.Column="1" MinWidth="190"
                               VerticalAlignment="Center" SelectionChanged="OnRefreshChanged" />
@@ -131,15 +132,15 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0">
-                        <TextBlock Text="方向" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="旋转此显示器的画面" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Display.Orientation], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Display.OrientationDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ComboBox x:Name="OrientCombo" Grid.Column="1" MinWidth="190"
                               VerticalAlignment="Center" SelectionChanged="OnOrientChanged">
-                        <ComboBoxItem Content="横向" />
-                        <ComboBoxItem Content="纵向" />
-                        <ComboBoxItem Content="横向（翻转）" />
-                        <ComboBoxItem Content="纵向（翻转）" />
+                        <ComboBoxItem Content="{Binding [Display.Orient.Landscape], Source={x:Static i18n:Localization.Instance}}" />
+                        <ComboBoxItem Content="{Binding [Display.Orient.Portrait], Source={x:Static i18n:Localization.Instance}}" />
+                        <ComboBoxItem Content="{Binding [Display.Orient.LandscapeFlipped], Source={x:Static i18n:Localization.Instance}}" />
+                        <ComboBoxItem Content="{Binding [Display.Orient.PortraitFlipped], Source={x:Static i18n:Localization.Instance}}" />
                     </ComboBox>
                 </Grid>
                 <Border Style="{StaticResource SettingDivider}" />
@@ -150,8 +151,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0">
-                        <TextBlock Text="缩放" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="文字、应用等项目的大小（在 Windows 设置中更改）" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Display.Scale], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Display.ScaleDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ComboBox x:Name="ScaleCombo" Grid.Column="1" MinWidth="190"
                               VerticalAlignment="Center" IsEnabled="False" />
@@ -165,7 +166,7 @@
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0">
                         <TextBlock Text="HDR" Style="{StaticResource SettingTitle}" />
-                        <TextBlock x:Name="HdrDesc" Text="高动态范围（需要显示器支持）" Style="{StaticResource SettingDesc}" />
+                        <TextBlock x:Name="HdrDesc" Text="{Binding [Display.HdrDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ui:ToggleSwitch x:Name="HdrToggle" Grid.Column="1" VerticalAlignment="Center"
                                      Checked="OnHdrToggled" Unchecked="OnHdrToggled" />
@@ -178,8 +179,8 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0">
-                        <TextBlock Text="启用此显示器" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="关闭后该显示器将不显示内容" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Display.Enable], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Display.EnableDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
                     <ui:ToggleSwitch x:Name="EnableToggle" Grid.Column="1" VerticalAlignment="Center"
                                      Checked="OnEnableToggled" Unchecked="OnEnableToggled" />
@@ -192,10 +193,10 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <StackPanel Margin="0,0,16,0">
-                        <TextBlock Text="主显示器" Style="{StaticResource SettingTitle}" />
-                        <TextBlock Text="任务栏与通知所在的位置" Style="{StaticResource SettingDesc}" />
+                        <TextBlock Text="{Binding [Display.SetPrimary], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingTitle}" />
+                        <TextBlock Text="{Binding [Display.SetPrimaryDesc], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource SettingDesc}" />
                     </StackPanel>
-                    <ui:Button x:Name="SetPrimaryBtn" Grid.Column="1" Content="设为主显示器"
+                    <ui:Button x:Name="SetPrimaryBtn" Grid.Column="1" Content="{Binding [Display.SetPrimary], Source={x:Static i18n:Localization.Instance}}"
                                VerticalAlignment="Center"
                                Appearance="Secondary" Click="OnSetPrimary" />
                 </Grid>
@@ -203,7 +204,7 @@
         </Border>
 
         <!-- 未启用的显示器 -->
-        <TextBlock x:Name="InactiveTitle" Text="检测到未启用的显示器"
+        <TextBlock x:Name="InactiveTitle" Text="{Binding [Display.InactiveTitle], Source={x:Static i18n:Localization.Instance}}"
                    Style="{StaticResource SettingTitle}" Margin="2,22,0,8" Visibility="Collapsed" />
         <Border x:Name="InactiveCard" Style="{StaticResource CardBorder}" Padding="18,8,18,8" Visibility="Collapsed">
             <StackPanel x:Name="InactiveList" />

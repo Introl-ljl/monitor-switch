@@ -1,4 +1,5 @@
 using System.Windows;
+using MonitorSwitch.I18n;
 using System.Windows.Input;
 using System.Windows.Media;
 using MonitorSwitch.Services;
@@ -197,7 +198,7 @@ public sealed class DisplayArrangeCanvas : FrameworkElement
 
         if (items is null || items.Count == 0)
         {
-            var hint = new FormattedText("未检测到显示器", System.Globalization.CultureInfo.CurrentCulture,
+            var hint = new FormattedText(Strings.T("Display.NoDisplays"), System.Globalization.CultureInfo.CurrentCulture,
                 FlowDirection.LeftToRight, face, 13, p.EmptyHint, dpi);
             dc.DrawText(hint, new Point(Math.Max(0, (ActualWidth - hint.Width) / 2), Math.Max(0, (ActualHeight - hint.Height) / 2)));
             return;

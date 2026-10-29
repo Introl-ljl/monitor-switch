@@ -1,4 +1,5 @@
 using System.Windows;
+using MonitorSwitch.I18n;
 using System.Windows.Controls;
 using MonitorSwitch.Interop;
 using MonitorSwitch.Models;
@@ -54,6 +55,8 @@ public partial class App : Application
 
         SettingsService.Instance.Load();
         ProfileStore.Instance.Load();
+        // 语言必须先于任何界面文案生效（日志内容不参与本地化）
+        I18n.Localization.Instance.Apply(SettingsService.Instance.Current.Language);
         ThemeService.Apply(SettingsService.Instance.Current.Theme);
 
         _messages = new MessageHwnd();
@@ -67,7 +70,7 @@ public partial class App : Application
         SettingsService.Instance.SettingsChanged += OnSettingsChanged;
 
         _trayIconHandle = LoadTrayIcon();
-        _tray.Init(_messages.Handle, _trayIconHandle, "MonitorSwitch 显示器助手");
+        _tray.Init(_messages.Handle, _trayIconHandle, Strings.T("App.Title"));
         _tray.LeftClick += ToggleFlyout;
         _tray.RightClick += ShowTrayMenu;
 
@@ -86,6 +89,15 @@ public partial class App : Application
     {
         // 主题可能被托盘或设置页修改，统一在这里响应
         ThemeService.Apply(SettingsService.Instance.Current.Theme);
+
+        // 语言切换：索引器绑定会自动刷新，但窗口标题是普通字符串，
+        // 需要显式同步一次；托盘提示同理。
+        if (I18n.Localization.Instance.Apply(SettingsService.Instance.Current.Language))
+        {
+            var title = Strings.T("App.Title");
+            if (_mainWindow is not null) _mainWindow.Title = title;
+            _tray.SetTip(title);
+        }
     }
 
     /// <summary>
@@ -244,13 +256,13 @@ public partial class App : Application
             menu.Items.Add(new Separator());
         }
 
-        var open = new MenuItem { Header = "打开主窗口" };
+        var open = new MenuItem { Header = Strings.T("Tray.OpenMain") };
         open.Click += (_, _) => ShowMainWindow();
         menu.Items.Add(open);
 
         var autostart = new MenuItem
         {
-            Header = "开机时启动",
+            Header = Strings.T("Tray.MenuAutoStart"),
             IsCheckable = true,
             IsChecked = AutoStartService.IsEnabled(),
         };
@@ -258,7 +270,7 @@ public partial class App : Application
         menu.Items.Add(autostart);
 
         menu.Items.Add(new Separator());
-        var exit = new MenuItem { Header = "退出" };
+        var exit = new MenuItem { Header = Strings.T("Tray.MenuExit") };
         exit.Click += (_, _) => ExitApp();
         menu.Items.Add(exit);
 

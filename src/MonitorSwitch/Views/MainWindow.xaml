@@ -3,6 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:pages="clr-namespace:MonitorSwitch.Views"
+                 xmlns:i18n="clr-namespace:MonitorSwitch.I18n"
                  Title="MonitorSwitch 显示器助手"
                  Width="1120" Height="780"
                  MinWidth="940" MinHeight="620"
@@ -29,19 +30,19 @@
                            OpenPaneLength="200"
                            IsPaneToggleVisible="True">
             <ui:NavigationView.MenuItems>
-                <ui:NavigationViewItem Content="显示器" TargetPageType="{x:Type pages:DisplayPage}">
+                <ui:NavigationViewItem Content="{Binding [Nav.Displays], Source={x:Static i18n:Localization.Instance}}" TargetPageType="{x:Type pages:DisplayPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE7F4;" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
-                <ui:NavigationViewItem Content="配置模板" TargetPageType="{x:Type pages:ProfilesPage}">
+                <ui:NavigationViewItem Content="{Binding [Nav.Profiles], Source={x:Static i18n:Localization.Instance}}" TargetPageType="{x:Type pages:ProfilesPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE8C8;" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
             </ui:NavigationView.MenuItems>
             <ui:NavigationView.FooterMenuItems>
-                <ui:NavigationViewItem Content="设置" TargetPageType="{x:Type pages:SettingsPage}">
+                <ui:NavigationViewItem Content="{Binding [Nav.Settings], Source={x:Static i18n:Localization.Instance}}" TargetPageType="{x:Type pages:SettingsPage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon Glyph="&#xE713;" />
                     </ui:NavigationViewItem.Icon>

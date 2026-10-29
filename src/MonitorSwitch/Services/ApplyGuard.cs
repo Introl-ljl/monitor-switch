@@ -1,4 +1,5 @@
 using System.Windows;
+using MonitorSwitch.I18n;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
@@ -157,7 +158,7 @@ public sealed class RevertWindow : FluentWindow
 
         var title = new System.Windows.Controls.TextBlock
         {
-            Text = "已更改显示器配置",
+            Text = Strings.T("Revert.Title"),
             FontSize = 14,
             FontWeight = FontWeights.Normal,
             VerticalAlignment = VerticalAlignment.Center,
@@ -166,7 +167,7 @@ public sealed class RevertWindow : FluentWindow
 
         _countdown = new System.Windows.Controls.TextBlock
         {
-            Text = $"{_secondsLeft} 秒后自动还原",
+            Text = Strings.F("Revert.Countdown", _secondsLeft),
             FontSize = 12,
             Margin = new Thickness(0, 2, 0, 0),
         };
@@ -174,14 +175,14 @@ public sealed class RevertWindow : FluentWindow
 
         var keepBtn = new Wpf.Ui.Controls.Button
         {
-            Content = "保留更改",
+            Content = Strings.T("Revert.Keep"),
             Appearance = ControlAppearance.Primary,
             MinWidth = 96,
             VerticalAlignment = VerticalAlignment.Center,
         };
         var revertBtn = new Wpf.Ui.Controls.Button
         {
-            Content = "还原",
+            Content = Strings.T("Revert.Revert"),
             MinWidth = 76,
             Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -219,7 +220,7 @@ public sealed class RevertWindow : FluentWindow
             }
             else
             {
-                _countdown.Text = $"{_secondsLeft} 秒后自动还原";
+                _countdown.Text = Strings.F("Revert.Countdown", _secondsLeft);
             }
         };
         _timer.Start();

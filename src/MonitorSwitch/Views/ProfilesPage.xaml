@@ -3,6 +3,7 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       xmlns:controls="clr-namespace:MonitorSwitch.Controls"
+      xmlns:i18n="clr-namespace:MonitorSwitch.I18n"
       TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <!-- 滚动由 NavigationView 的 DynamicScrollViewer 负责，这里不要再套 ScrollViewer，
@@ -23,18 +24,18 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
             <StackPanel Margin="0,0,16,0">
-                <TextBlock Text="配置模板" Style="{StaticResource PageTitle}" />
-                <TextBlock Text="把当前的显示器排列与参数保存为模板，之后可在托盘或快捷键中一键切换。"
+                <TextBlock Text="{Binding [Profiles.Title], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="{Binding [Profiles.Subtitle], Source={x:Static i18n:Localization.Instance}}"
                            Style="{StaticResource PageSubtitle}" Margin="0,2,0,14" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,6,0,0">
-                <ui:Button Content="从当前配置新建" Appearance="Primary" Click="OnCreateProfile">
+                <ui:Button Content="{Binding [Profiles.Create], Source={x:Static i18n:Localization.Instance}}" Appearance="Primary" Click="OnCreateProfile">
                     <ui:Button.Icon>
                         <ui:FontIcon Glyph="&#xE710;" />
                     </ui:Button.Icon>
                 </ui:Button>
-                <ui:Button Content="导入" Appearance="Secondary" Margin="8,0,0,0" Click="OnImport" />
-                <ui:Button Content="导出" Appearance="Secondary" Margin="8,0,0,0" Click="OnExport" />
+                <ui:Button Content="{Binding [Profiles.Import], Source={x:Static i18n:Localization.Instance}}" Appearance="Secondary" Margin="8,0,0,0" Click="OnImport" />
+                <ui:Button Content="{Binding [Profiles.Export], Source={x:Static i18n:Localization.Instance}}" Appearance="Secondary" Margin="8,0,0,0" Click="OnExport" />
             </StackPanel>
         </Grid>
 
@@ -42,8 +43,8 @@
 
         <Border x:Name="EmptyState" Style="{StaticResource CardBorder}" Padding="24,22" Visibility="Collapsed">
             <StackPanel>
-                <TextBlock Text="还没有配置模板" FontSize="14" FontWeight="Normal" />
-                <TextBlock Text="点击右上角“从当前配置新建”，即可把当前的显示器排列与参数保存为模板。"
+                <TextBlock Text="{Binding [Profiles.EmptyTitle], Source={x:Static i18n:Localization.Instance}}" FontSize="14" FontWeight="Normal" />
+                <TextBlock Text="{Binding [Profiles.EmptyDesc], Source={x:Static i18n:Localization.Instance}}"
                            Style="{StaticResource SettingDesc}" Margin="0,4,0,0" />
             </StackPanel>
         </Border>
@@ -87,7 +88,7 @@
                             <WrapPanel Margin="14,0,14,10">
                                 <Border Style="{StaticResource Chip}" Margin="0,0,6,0"
                                         Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}">
-                                    <TextBlock Text="当前使用中" Style="{StaticResource ChipText}" />
+                                    <TextBlock Text="{Binding [Profiles.CurrentBadge], Source={x:Static i18n:Localization.Instance}}" Style="{StaticResource ChipText}" />
                                 </Border>
                                 <Border Style="{StaticResource Chip}"
                                         Visibility="{Binding IsEditingHotkey, Converter={StaticResource InverseBoolToVis}}">
@@ -105,12 +106,12 @@
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="*" />
                                 </Grid.ColumnDefinitions>
-                                <ui:Button Content="应用" Appearance="Primary" MinWidth="76"
+                                <ui:Button Content="{Binding [Common.Apply], Source={x:Static i18n:Localization.Instance}}" Appearance="Primary" MinWidth="76"
                                            HorizontalAlignment="Left" Click="OnApplyProfile" Tag="{Binding}" />
                                 <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right">
-                                    <ui:Button Content="重命名" Appearance="Secondary" Padding="10,5" Click="OnRenameProfile" Tag="{Binding}" />
-                                    <ui:Button Content="快捷键" Appearance="Secondary" Padding="10,5" Margin="6,0,0,0" Click="OnEditHotkey" Tag="{Binding}" />
-                                    <ui:Button Content="删除" Appearance="Secondary" Padding="10,5" Margin="6,0,0,0" Click="OnDeleteProfile" Tag="{Binding}" />
+                                    <ui:Button Content="{Binding [Common.Rename], Source={x:Static i18n:Localization.Instance}}" Appearance="Secondary" Padding="10,5" Click="OnRenameProfile" Tag="{Binding}" />
+                                    <ui:Button Content="{Binding [Profiles.HotkeyButton], Source={x:Static i18n:Localization.Instance}}" Appearance="Secondary" Padding="10,5" Margin="6,0,0,0" Click="OnEditHotkey" Tag="{Binding}" />
+                                    <ui:Button Content="{Binding [Common.Delete], Source={x:Static i18n:Localization.Instance}}" Appearance="Secondary" Padding="10,5" Margin="6,0,0,0" Click="OnDeleteProfile" Tag="{Binding}" />
                                 </StackPanel>
                             </Grid>
                         </StackPanel>

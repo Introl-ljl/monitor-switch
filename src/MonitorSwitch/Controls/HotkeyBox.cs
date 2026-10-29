@@ -1,4 +1,5 @@
 using System.Windows;
+using MonitorSwitch.I18n;
 using System.Windows.Input;
 
 namespace MonitorSwitch.Controls;
@@ -29,7 +30,7 @@ public sealed class HotkeyBox : Wpf.Ui.Controls.Button
     private void OnCaptureClick(object sender, RoutedEventArgs e)
     {
         _capturing = true;
-        Content = "按下快捷键…";
+        Content = Strings.T("Hotkey.Capturing");
         // 按钮本身能获得键盘焦点，但需要显式请求，否则收不到 PreviewKeyDown
         Focusable = true;
         Focus();
@@ -59,7 +60,7 @@ public sealed class HotkeyBox : Wpf.Ui.Controls.Button
         if (key == Key.Escape)
         {
             _capturing = false;
-            Content = "(无)";
+            Content = Strings.T("Common.None");
             HotkeyCaptured?.Invoke(this, null);
             return;
         }
@@ -67,7 +68,7 @@ public sealed class HotkeyBox : Wpf.Ui.Controls.Button
         if (key is Key.Back or Key.Delete)
         {
             _capturing = false;
-            Content = "(无)";
+            Content = Strings.T("Common.None");
             HotkeyCaptured?.Invoke(this, null);
             return;
         }
@@ -75,13 +76,13 @@ public sealed class HotkeyBox : Wpf.Ui.Controls.Button
         var mods = Keyboard.Modifiers;
         if (mods == ModifierKeys.None)
         {
-            Content = "需包含 Ctrl/Alt/Shift/Win";
+            Content = Strings.T("Hotkey.NeedsModifier");
             return;
         }
 
         if (!TryKeyText(key, out var keyText))
         {
-            Content = "不支持该按键";
+            Content = Strings.T("Hotkey.Unsupported");
             return;
         }
 
@@ -103,12 +104,12 @@ public sealed class HotkeyBox : Wpf.Ui.Controls.Button
     {
         _lastHotkey = hotkey;
         if (_capturing) return;
-        Content = string.IsNullOrWhiteSpace(hotkey) ? "(无)" : hotkey;
+        Content = string.IsNullOrWhiteSpace(hotkey) ? Strings.T("Common.None") : hotkey;
     }
 
     private void RestoreContent()
     {
-        Content = string.IsNullOrWhiteSpace(_lastHotkey) ? "(无)" : _lastHotkey;
+        Content = string.IsNullOrWhiteSpace(_lastHotkey) ? Strings.T("Common.None") : _lastHotkey;
     }
 
     private static bool TryKeyText(Key key, out string text)

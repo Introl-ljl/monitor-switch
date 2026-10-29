@@ -1,4 +1,5 @@
 using System.Windows;
+using MonitorSwitch.I18n;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using MonitorSwitch.Controls;
@@ -88,7 +89,7 @@ public partial class DisplayPage : Page
         catch (Exception ex)
         {
             AppPaths.Log("读取显示器信息失败: " + ex);
-            ShowResult(false, "读取显示器信息失败：" + ex.Message, null);
+            ShowResult(false, Strings.F("Result.ReadFailed", ex.Message), null);
             return;
         }
 
@@ -167,14 +168,14 @@ public partial class DisplayPage : Page
             stack.Children.Add(new TextBlock { Text = t.MonitorName, Style = (Style)FindResource("SettingTitle") });
             stack.Children.Add(new TextBlock
             {
-                Text = t.PreferredW > 0 ? $"首选 {t.PreferredW} × {t.PreferredH}" : "未在桌面中启用",
+                Text = t.PreferredW > 0 ? Strings.F("Display.InactivePreferred", t.PreferredW, t.PreferredH) : Strings.T("Display.InactiveNotEnabled"),
                 Style = (Style)FindResource("SettingDesc"),
                 Margin = new Thickness(0, 2, 0, 0),
             });
 
             var btn = new Wpf.Ui.Controls.Button
             {
-                Content = "启用",
+                Content = Strings.T("Display.InactiveEnable"),
                 Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary,
                 MinWidth = 80,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -272,11 +273,11 @@ public partial class DisplayPage : Page
                 _ => 0,
             };
 
-            ScaleCombo.ItemsSource = new[] { $"{d.ScalePercent:0}%（推荐）" };
+            ScaleCombo.ItemsSource = new[] { Strings.F("Display.ScaleValue", $"{d.ScalePercent:0}") };
             ScaleCombo.SelectedIndex = 0;
 
             HdrToggle.Visibility = d.HdrSupported ? Visibility.Visible : Visibility.Collapsed;
-            HdrDesc.Text = d.HdrSupported ? "高动态范围（需要显示器支持）" : "此显示器不支持 HDR";
+            HdrDesc.Text = d.HdrSupported ? Strings.T("Display.HdrDesc") : Strings.T("Display.HdrUnsupported");
             HdrToggle.IsChecked = e.Hdr;
             HdrToggle.IsEnabled = d.HdrSupported;
 
@@ -372,7 +373,7 @@ public partial class DisplayPage : Page
     private static string BuildSubText(LiveDisplay d, DisplayDraft.Entry e)
     {
         var hz = DisplayProfile.FormatHz(e.RefreshHz);
-        return $"{d.AdapterName} · {d.ConnectorName} · {e.Width} × {e.Height} @ {hz} · 缩放 {d.ScalePercent:0}%";
+        return $"{d.AdapterName} · {d.ConnectorName} · {e.Width} × {e.Height} @ {hz} · {d.ScalePercent:0}%";
     }
 
     /// <summary>把草稿里的位置与启用状态同步到排列画布。</summary>
@@ -456,7 +457,7 @@ public partial class DisplayPage : Page
         _draft.Reset(_displays);
         SyncControlsFromDraft();
         UpdatePendingState();
-        ShowResult(true, null, null, "已恢复为当前系统配置。", title: "已撤销");
+        ShowResult(true, null, null, Strings.T("Result.DiscardedMsg"), title: Strings.T("Result.Discarded"));
     }
 
     // ---------------------------------------------------------------- 控件事件（只改草稿）
@@ -520,7 +521,7 @@ public partial class DisplayPage : Page
         // 至少保留一台启用的显示器
         if (!on && _displays.Count <= 1)
         {
-            ShowResult(false, "至少需要保留一台启用的显示器。", null);
+            ShowResult(false, Strings.T("Result.AtLeastOneDisplay"), null);
             _loading = true;
             EnableToggle.IsChecked = true;
             _loading = false;
@@ -557,7 +558,7 @@ public partial class DisplayPage : Page
             var snap = DisplayService.Instance.BuildSnapshotForTarget(path, rightX, topY);
             if (snap == null)
             {
-                ShowResult(false, "无法读取该显示器的首选模式，未能启用。", null);
+                ShowResult(false, Strings.T("Msg.CannotReadPreferred"), null);
                 return;
             }
             current.Monitors.Add(snap);
@@ -620,7 +621,7 @@ public partial class DisplayPage : Page
 
     private void OnDetect(object sender, RoutedEventArgs e)
     {
-        ShowResult(true, null, null, "已重新检测显示器。", title: "已刷新");
+        ShowResult(true, null, null, Strings.T("Result.RefreshedMsg"), title: Strings.T("Result.Refreshed"));
         RefreshAll();
     }
 
@@ -634,21 +635,21 @@ public partial class DisplayPage : Page
         if (!success)
         {
             ResultBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Error;
-            ResultBar.Title = title ?? "应用失败";
-            ResultBar.Message = error ?? "未知错误";
+            ResultBar.Title = title ?? Strings.T("Result.Failed");
+            ResultBar.Message = error ?? Strings.T("Common.UnknownError");
             return;
         }
         if (warnings is { Count: > 0 })
         {
             ResultBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Warning;
-            ResultBar.Title = title ?? "已应用（部分设置未生效）";
+            ResultBar.Title = title ?? Strings.T("Result.AppliedPartial");
             ResultBar.Message = string.Join(" ", warnings);
         }
         else
         {
             ResultBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Success;
-            ResultBar.Title = title ?? "已应用";
-            ResultBar.Message = successMessage ?? "显示器配置已更新。";
+            ResultBar.Title = title ?? Strings.T("Result.Applied");
+            ResultBar.Message = successMessage ?? Strings.T("Result.AppliedMsg");
         }
     }
 }

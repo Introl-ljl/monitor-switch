@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using MonitorSwitch.I18n;
 using MonitorSwitch.Interop;
 using MonitorSwitch.Models;
 
@@ -149,10 +150,10 @@ public sealed class DisplayService
         if (!string.IsNullOrWhiteSpace(name)) return name;
 
         var pnp = (GdiNative.GetMonitorPnpName(srcGdiName) ?? string.Empty).Trim();
-        if (string.IsNullOrWhiteSpace(pnp)) return "未知显示器";
+        if (string.IsNullOrWhiteSpace(pnp)) return Strings.T("Display.UnknownMonitor");
         // 内置屏在 GDI 中通常只报 Generic PnP Monitor
         if (pnp.Equals("Generic PnP Monitor", StringComparison.OrdinalIgnoreCase))
-            return "内置显示屏";
+            return Strings.T("Display.BuiltIn");
         return pnp;
     }
 
@@ -379,7 +380,7 @@ public sealed class DisplayService
         catch (Exception ex)
         {
             AppPaths.Log("ApplyProfile 异常: " + ex);
-            return ApplyResult.Fail("应用配置时发生内部错误：" + ex.Message);
+            return ApplyResult.Fail(Strings.F("Apply.InternalError", ex.Message));
         }
     }
 
@@ -387,7 +388,7 @@ public sealed class DisplayService
     {
         var active = profile.Monitors.Where(m => m.Active).ToList();
         if (active.Count == 0)
-            return ApplyResult.Fail("该配置没有启用任何显示器。");
+            return ApplyResult.Fail(Strings.T("Apply.NoActiveDisplay"));
 
         var q = CcdNative.Query(CcdNative.QDC_ALL_PATHS);
 
@@ -448,7 +449,7 @@ public sealed class DisplayService
         }
 
         if (missing.Count > 0)
-            return ApplyResult.Fail("以下显示器当前未连接，无法应用：" + string.Join("、", missing));
+            return ApplyResult.Fail(Strings.F("Apply.MissingDisplays", string.Join(", ", missing)));
 
         var errors = new List<string>();
         foreach (var attempt in AttemptLadder)
@@ -508,7 +509,7 @@ public sealed class DisplayService
         }
 
         AppPaths.Log("ApplyProfile 失败: " + string.Join(" | ", errors));
-        return ApplyResult.Fail("无法应用该显示配置（" + string.Join("；", errors) + "）。");
+        return ApplyResult.Fail(Strings.F("Apply.FailedFormat", string.Join("; ", errors)));
     }
 
     private static string SourceKeyOf(CcdNative.QueryResult qq, int pathIndex) =>
@@ -693,11 +694,11 @@ public sealed class DisplayService
                 var (sup, en) = CcdNative.GetAdvancedColor(ti.Adapter, ti.Id);
                 if (!sup)
                 {
-                    if (mon.Hdr) warnings.Add($"“{mon.MonitorName}”不支持 HDR，已跳过。");
+                    if (mon.Hdr) warnings.Add(Strings.F("Apply.HdrUnsupported", mon.MonitorName));
                     continue;
                 }
                 if (en != mon.Hdr && !CcdNative.SetAdvancedColor(ti.Adapter, ti.Id, mon.Hdr))
-                    warnings.Add($"“{mon.MonitorName}”的 HDR 状态未能切换。");
+                    warnings.Add(Strings.F("Apply.HdrFailed", mon.MonitorName));
             }
         }
         catch (Exception ex)
@@ -721,7 +722,7 @@ public sealed class DisplayService
         };
         var hr = CcdNative.SetDisplayConfig(0, null, 0, null, sdc | CcdNative.SDC_APPLY);
         if (hr != CcdNative.ERROR_SUCCESS)
-            return ApplyResult.Fail("切换失败：" + CcdNative.DescribeError(hr));
+            return ApplyResult.Fail(Strings.F("Apply.TopologyFailed", CcdNative.DescribeError(hr)));
         RaiseDisplaysChanged();
         return ApplyResult.Ok();
     }

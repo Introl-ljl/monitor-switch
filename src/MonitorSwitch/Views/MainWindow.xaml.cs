@@ -15,6 +15,8 @@ public partial class MainWindow : FluentWindow
     public MainWindow()
     {
         InitializeComponent();
+        // XAML 里的 Title 只是设计期占位，实际文案随语言设置走
+        Title = I18n.Strings.T("App.Title");
         RootNavigation.ItemInvoked += OnNavItemInvoked;
         // SelectionChanged 的参数类型是 RoutedEventArgs（WPF-UI 自定义事件），
         // 用 SelectionChangedEventArgs 订阅会静默失败。

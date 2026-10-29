@@ -3,6 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:controls="clr-namespace:MonitorSwitch.Controls"
+      xmlns:i18n="clr-namespace:MonitorSwitch.I18n"
                  Title="MonitorSwitch"
                  Width="380"
                  MinWidth="0" MinHeight="0"
@@ -30,17 +31,17 @@
                  FluentWindow + ExtendsContentIntoTitleBar 已经把客户区当标题栏，
                  再叠 WindowChrome.CaptionHeight 不会生效（已实测）。 -->
             <Grid Grid.Row="0" x:Name="DragHandle" Margin="0,0,0,6" Background="Transparent">
-                <TextBlock Text="配置模板" FontSize="16" FontWeight="Normal"
+                <TextBlock Text="{Binding [Tray.ProfilesTitle], Source={x:Static i18n:Localization.Instance}}" FontSize="16" FontWeight="Normal"
                            Margin="6,2,0,0" VerticalAlignment="Center"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <ui:Button Appearance="Transparent" ToolTip="从当前配置新建模板" Click="OnAdd"
+                    <ui:Button Appearance="Transparent" ToolTip="{Binding [Tray.NewFromCurrent], Source={x:Static i18n:Localization.Instance}}" Click="OnAdd"
                                VerticalAlignment="Center" Padding="6">
                         <ui:Button.Icon>
                             <ui:FontIcon Glyph="&#xE710;" />
                         </ui:Button.Icon>
                     </ui:Button>
-                    <ui:Button Appearance="Transparent" ToolTip="打开主窗口" Click="OnOpenMain"
+                    <ui:Button Appearance="Transparent" ToolTip="{Binding [Tray.OpenMain], Source={x:Static i18n:Localization.Instance}}" Click="OnOpenMain"
                                Margin="2,0,0,0" VerticalAlignment="Center" Padding="6">
                         <ui:Button.Icon>
                             <ui:FontIcon Glyph="&#xE8A7;" />
@@ -53,17 +54,17 @@
             <StackPanel Grid.Row="2">
                 <Border Height="1" Background="{DynamicResource DividerStrokeColorDefaultBrush}" Margin="4,8,4,6" />
 
-                <TextBlock x:Name="TopologyTitle" Text="投影模式" FontSize="11" Margin="8,0,0,4"
+                <TextBlock x:Name="TopologyTitle" Text="{Binding [Tray.Topology], Source={x:Static i18n:Localization.Instance}}" FontSize="11" Margin="8,0,0,4"
                            Visibility="Collapsed"
                            Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                 <UniformGrid x:Name="TopologyRow" Columns="4" Visibility="Collapsed" Margin="0,0,0,4">
-                    <ui:Button Content="仅电脑屏幕" Appearance="Transparent" Click="OnTopology" Tag="InternalOnly"
+                    <ui:Button Content="{Binding [Tray.InternalOnly], Source={x:Static i18n:Localization.Instance}}" Appearance="Transparent" Click="OnTopology" Tag="InternalOnly"
                                FontSize="11" Margin="0,0,3,0" Padding="4,6" />
-                    <ui:Button Content="复制" Appearance="Transparent" Click="OnTopology" Tag="Clone"
+                    <ui:Button Content="{Binding [Tray.Clone], Source={x:Static i18n:Localization.Instance}}" Appearance="Transparent" Click="OnTopology" Tag="Clone"
                                FontSize="11" Margin="3,0" Padding="4,6" />
-                    <ui:Button Content="扩展" Appearance="Transparent" Click="OnTopology" Tag="Extend"
+                    <ui:Button Content="{Binding [Tray.Extend], Source={x:Static i18n:Localization.Instance}}" Appearance="Transparent" Click="OnTopology" Tag="Extend"
                                FontSize="11" Margin="3,0" Padding="4,6" />
-                    <ui:Button Content="仅第二屏幕" Appearance="Transparent" Click="OnTopology" Tag="ExternalOnly"
+                    <ui:Button Content="{Binding [Tray.ExternalOnly], Source={x:Static i18n:Localization.Instance}}" Appearance="Transparent" Click="OnTopology" Tag="ExternalOnly"
                                FontSize="11" Margin="3,0,0,0" Padding="4,6" />
                 </UniformGrid>
 
@@ -71,7 +72,7 @@
                             Severity="Error" Margin="0,4,0,4" />
 
                 <Grid Margin="6,4,6,0">
-                    <ui:Button Content="打开主窗口" Appearance="Transparent" HorizontalAlignment="Left"
+                    <ui:Button Content="{Binding [Tray.OpenMain], Source={x:Static i18n:Localization.Instance}}" Appearance="Transparent" HorizontalAlignment="Left"
                                Click="OnOpenMain" FontSize="12" Padding="8,4" />
                     <TextBlock x:Name="VersionText" HorizontalAlignment="Right" VerticalAlignment="Center"
                                FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
@@ -125,7 +126,7 @@
                                                        Margin="0,0,6,0" VerticalAlignment="Center"
                                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
                                             <ui:FontIcon x:Name="CurrentIcon" Glyph="&#xE73E;" FontSize="14"
-                                                         ToolTip="当前使用中"
+                                                         ToolTip="{Binding [Tray.InUse], Source={x:Static i18n:Localization.Instance}}"
                                                          Foreground="{DynamicResource SystemAccentColorBrush}"
                                                          Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}" />
                                         </StackPanel>
@@ -143,8 +144,8 @@
 
                 <StackPanel x:Name="EmptyHint" VerticalAlignment="Center" Margin="12,20,12,20"
                             Visibility="Collapsed">
-                    <TextBlock Text="还没有配置模板" FontSize="13" FontWeight="Normal" />
-                    <TextBlock Text="点击右上角的 ＋ 保存当前的显示器配置。" FontSize="12" Margin="0,3,0,0"
+                    <TextBlock Text="{Binding [Tray.EmptyTitle], Source={x:Static i18n:Localization.Instance}}" FontSize="13" FontWeight="Normal" />
+                    <TextBlock Text="{Binding [Tray.EmptyDesc], Source={x:Static i18n:Localization.Instance}}" FontSize="12" Margin="0,3,0,0"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
             </Grid>
