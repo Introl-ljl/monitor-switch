@@ -1,0 +1,24 @@
+name: build
+
+on:
+  push:
+    branches: [ master, main ]
+  pull_request:
+    branches: [ master, main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore src/MonitorSwitch/MonitorSwitch.csproj
+
+      - name: Build
+        run: dotnet build src/MonitorSwitch/MonitorSwitch.csproj -c Release --no-restore -warnaserror
