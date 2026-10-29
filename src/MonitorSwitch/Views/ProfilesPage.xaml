@@ -1,0 +1,123 @@
+<Page x:Class="MonitorSwitch.Views.ProfilesPage"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:controls="clr-namespace:MonitorSwitch.Controls"
+      TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <!-- 滚动由 NavigationView 的 DynamicScrollViewer 负责，这里不要再套 ScrollViewer，
+         否则内层视口会被撑到内容高度、滚轮事件被吞掉（详见 DisplayPage.xaml 的说明）。
+
+         宽度：第一列 MaxWidth 封顶、第二列吃掉剩余空间，内容左对齐且撑满可用宽度。 -->
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" MaxWidth="1000" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+
+        <StackPanel Grid.Column="0" Margin="36,20,36,36">
+
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Margin="0,0,16,0">
+                <TextBlock Text="配置模板" Style="{StaticResource PageTitle}" />
+                <TextBlock Text="把当前的显示器排列与参数保存为模板，之后可在托盘或快捷键中一键切换。"
+                           Style="{StaticResource PageSubtitle}" Margin="0,2,0,14" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,6,0,0">
+                <ui:Button Content="从当前配置新建" Appearance="Primary" Click="OnCreateProfile">
+                    <ui:Button.Icon>
+                        <ui:FontIcon Glyph="&#xE710;" />
+                    </ui:Button.Icon>
+                </ui:Button>
+                <ui:Button Content="导入" Appearance="Secondary" Margin="8,0,0,0" Click="OnImport" />
+                <ui:Button Content="导出" Appearance="Secondary" Margin="8,0,0,0" Click="OnExport" />
+            </StackPanel>
+        </Grid>
+
+        <ui:InfoBar x:Name="ResultBar" IsOpen="False" IsClosable="True" Margin="0,0,0,14" />
+
+        <Border x:Name="EmptyState" Style="{StaticResource CardBorder}" Padding="24,22" Visibility="Collapsed">
+            <StackPanel>
+                <TextBlock Text="还没有配置模板" FontSize="14" FontWeight="Normal" />
+                <TextBlock Text="点击右上角“从当前配置新建”，即可把当前的显示器排列与参数保存为模板。"
+                           Style="{StaticResource SettingDesc}" Margin="0,4,0,0" />
+            </StackPanel>
+        </Border>
+
+        <ItemsControl x:Name="Cards">
+            <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                    <WrapPanel Orientation="Horizontal" />
+                </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                    <Border Style="{StaticResource CardBorder}" Width="348" Padding="0" Margin="0,0,12,12">
+                        <StackPanel>
+                            <Grid Margin="14,12,14,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border CornerRadius="4" Padding="4" VerticalAlignment="Top"
+                                        Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1">
+                                    <controls:MonitorLayoutPreview Width="96" Height="60"
+                                                                   Items="{Binding Preview}" />
+                                </Border>
+                                <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Top">
+                                    <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Normal"
+                                               TextTrimming="CharacterEllipsis"
+                                               Visibility="{Binding IsRenaming, Converter={StaticResource InverseBoolToVis}}" />
+                                    <TextBox x:Name="RenameBox" Text="{Binding EditName, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding IsRenaming, Converter={StaticResource BoolToVis}}"
+                                             KeyDown="OnRenameKeyDown" LostFocus="OnRenameCommit"
+                                             Loaded="OnRenameBoxLoaded" />
+                                    <TextBlock Text="{Binding Summary}" Style="{StaticResource SettingDesc}"
+                                               Margin="0,3,0,0" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Grid>
+
+                            <!-- 状态标签单独占一行，避免与模板名/摘要挤在一起被裁切 -->
+                            <WrapPanel Margin="14,0,14,10">
+                                <Border Style="{StaticResource Chip}" Margin="0,0,6,0"
+                                        Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}">
+                                    <TextBlock Text="当前使用中" Style="{StaticResource ChipText}" />
+                                </Border>
+                                <Border Style="{StaticResource Chip}"
+                                        Visibility="{Binding IsEditingHotkey, Converter={StaticResource InverseBoolToVis}}">
+                                    <TextBlock Text="{Binding HotkeyText}" Style="{StaticResource ChipText}" />
+                                </Border>
+                                <controls:HotkeyBox FontSize="12" MinWidth="130"
+                                                    Visibility="{Binding IsEditingHotkey, Converter={StaticResource BoolToVis}}"
+                                                    HotkeyCaptured="OnHotkeyCaptured" Loaded="OnHotkeyBoxLoaded" />
+                            </WrapPanel>
+
+                            <Border Style="{StaticResource SettingDivider}" Margin="0" />
+
+                            <Grid Margin="12,10,12,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <ui:Button Content="应用" Appearance="Primary" MinWidth="76"
+                                           HorizontalAlignment="Left" Click="OnApplyProfile" Tag="{Binding}" />
+                                <StackPanel Orientation="Horizontal" Grid.Column="1" HorizontalAlignment="Right">
+                                    <ui:Button Content="重命名" Appearance="Secondary" Padding="10,5" Click="OnRenameProfile" Tag="{Binding}" />
+                                    <ui:Button Content="快捷键" Appearance="Secondary" Padding="10,5" Margin="6,0,0,0" Click="OnEditHotkey" Tag="{Binding}" />
+                                    <ui:Button Content="删除" Appearance="Secondary" Padding="10,5" Margin="6,0,0,0" Click="OnDeleteProfile" Tag="{Binding}" />
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        </StackPanel>
+    </Grid>
+</Page>

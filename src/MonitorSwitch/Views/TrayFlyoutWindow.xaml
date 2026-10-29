@@ -1,0 +1,155 @@
+<ui:FluentWindow x:Class="MonitorSwitch.Views.TrayFlyoutWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:controls="clr-namespace:MonitorSwitch.Controls"
+                 Title="MonitorSwitch"
+                 Width="380"
+                 MinWidth="0" MinHeight="0"
+                 SizeToContent="Height"
+                 WindowStyle="None"
+                 ResizeMode="NoResize"
+                 ShowInTaskbar="False"
+                 ShowActivated="True"
+                 Topmost="True"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Acrylic"
+                 RenderOptions.ClearTypeHint="Enabled"
+                 TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <Border Padding="10" x:Name="RootPanel">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- 顶部标题（兼作拖动条）。
+                 拖动由 code-behind 的 DragMove 处理：
+                 FluentWindow + ExtendsContentIntoTitleBar 已经把客户区当标题栏，
+                 再叠 WindowChrome.CaptionHeight 不会生效（已实测）。 -->
+            <Grid Grid.Row="0" x:Name="DragHandle" Margin="0,0,0,6" Background="Transparent">
+                <TextBlock Text="配置模板" FontSize="16" FontWeight="Normal"
+                           Margin="6,2,0,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <ui:Button Appearance="Transparent" ToolTip="从当前配置新建模板" Click="OnAdd"
+                               VerticalAlignment="Center" Padding="6">
+                        <ui:Button.Icon>
+                            <ui:FontIcon Glyph="&#xE710;" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+                    <ui:Button Appearance="Transparent" ToolTip="打开主窗口" Click="OnOpenMain"
+                               Margin="2,0,0,0" VerticalAlignment="Center" Padding="6">
+                        <ui:Button.Icon>
+                            <ui:FontIcon Glyph="&#xE8A7;" />
+                        </ui:Button.Icon>
+                    </ui:Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- 底部固定区域 -->
+            <StackPanel Grid.Row="2">
+                <Border Height="1" Background="{DynamicResource DividerStrokeColorDefaultBrush}" Margin="4,8,4,6" />
+
+                <TextBlock x:Name="TopologyTitle" Text="投影模式" FontSize="11" Margin="8,0,0,4"
+                           Visibility="Collapsed"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                <UniformGrid x:Name="TopologyRow" Columns="4" Visibility="Collapsed" Margin="0,0,0,4">
+                    <ui:Button Content="仅电脑屏幕" Appearance="Transparent" Click="OnTopology" Tag="InternalOnly"
+                               FontSize="11" Margin="0,0,3,0" Padding="4,6" />
+                    <ui:Button Content="复制" Appearance="Transparent" Click="OnTopology" Tag="Clone"
+                               FontSize="11" Margin="3,0" Padding="4,6" />
+                    <ui:Button Content="扩展" Appearance="Transparent" Click="OnTopology" Tag="Extend"
+                               FontSize="11" Margin="3,0" Padding="4,6" />
+                    <ui:Button Content="仅第二屏幕" Appearance="Transparent" Click="OnTopology" Tag="ExternalOnly"
+                               FontSize="11" Margin="3,0,0,0" Padding="4,6" />
+                </UniformGrid>
+
+                <ui:InfoBar x:Name="ErrorBar" IsOpen="False" IsClosable="True"
+                            Severity="Error" Margin="0,4,0,4" />
+
+                <Grid Margin="6,4,6,0">
+                    <ui:Button Content="打开主窗口" Appearance="Transparent" HorizontalAlignment="Left"
+                               Click="OnOpenMain" FontSize="12" Padding="8,4" />
+                    <TextBlock x:Name="VersionText" HorizontalAlignment="Right" VerticalAlignment="Center"
+                               FontSize="11" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                </Grid>
+            </StackPanel>
+
+            <!-- 模板列表（可滚动，随内容收缩） -->
+            <Grid Grid.Row="1">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                              Padding="0,0,4,0" MaxHeight="360"
+                              PanningMode="VerticalOnly">
+                    <ItemsControl x:Name="ProfileList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border x:Name="Row" CornerRadius="6" Padding="10,7" Margin="0,1"
+                                        Cursor="Hand" MouseLeftButtonUp="OnApplyProfileRow" Tag="{Binding}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="Transparent" />
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background"
+                                                            Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border CornerRadius="4" Padding="3" VerticalAlignment="Center"
+                                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                                BorderThickness="1">
+                                            <controls:MonitorLayoutPreview Width="54" Height="32"
+                                                                           Items="{Binding Preview}" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="10,0,8,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Normal"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                            <TextBlock Text="{Binding Summary}" FontSize="11" Margin="0,1,0,0"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <TextBlock x:Name="HotkeyChip" Text="{Binding ShortHotkey}" FontSize="10"
+                                                       Margin="0,0,6,0" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                            <ui:FontIcon x:Name="CurrentIcon" Glyph="&#xE73E;" FontSize="14"
+                                                         ToolTip="当前使用中"
+                                                         Foreground="{DynamicResource SystemAccentColorBrush}"
+                                                         Visibility="{Binding IsCurrent, Converter={StaticResource BoolToVis}}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding ShortHotkey}" Value="">
+                                        <Setter TargetName="HotkeyChip" Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </DataTemplate.Triggers>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <StackPanel x:Name="EmptyHint" VerticalAlignment="Center" Margin="12,20,12,20"
+                            Visibility="Collapsed">
+                    <TextBlock Text="还没有配置模板" FontSize="13" FontWeight="Normal" />
+                    <TextBlock Text="点击右上角的 ＋ 保存当前的显示器配置。" FontSize="12" Margin="0,3,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</ui:FluentWindow>
+
+

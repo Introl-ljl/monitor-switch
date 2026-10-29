@@ -1,0 +1,31 @@
+# ---- .NET / WPF 构建产物 ----
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ---- 项目自带的本地 .NET SDK（约数百 MB，不应进版本库）----
+/.dotnet/
+
+# ---- 调试探针程序（仅本地用于验证渲染/内存，非产品代码）----
+/probe/
+
+# ---- 排查 UI 问题时产生的一次性截图与对比图 ----
+_*.png
+preview.png
+preview-*.png
+fixed.png
+fixed-*.png
+final.png
+final-*.png
+font-*.png
+kb-nav.png
+nav-test.png
+
+# ---- 构建/工具临时文件 ----
+[Bb]uild[Ll]ogs/
+.vs/
+*.binlog
+*.log
