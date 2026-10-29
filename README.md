@@ -39,6 +39,8 @@ or hit a global hotkey, and everything comes back at once.
   plus projector shortcuts (PC only / Duplicate / Extend / 2nd only). The panel is draggable
   and remembers where you put it.
 - **Global hotkeys** — bind any profile to Ctrl/Alt/Shift/Win + a letter, digit or F1–F24.
+- **CLI** — switch profiles and change resolution, refresh rate, rotation or HDR from
+  scripts, with `--json` output and stable exit codes. See [docs/cli.md](docs/cli.md).
 - **Light, dark or follow Windows**, in **English or 简体中文** — switchable without restart.
 - **~8 MB resident** while sitting in the tray.
 
@@ -89,6 +91,23 @@ selected display below.
 MonitorSwitch.exe              # normal launch
 MonitorSwitch.exe --minimized  # tray only, no main window
 ```
+
+Profiles and display parameters can also be driven entirely from the command line —
+handy for scripts, hotkey launchers and window managers:
+
+```powershell
+MonitorSwitch.exe list                 # list profiles, "*" marks the active one
+MonitorSwitch.exe apply work           # switch to the "work" profile
+MonitorSwitch.exe save gaming          # save the current setup as a profile
+MonitorSwitch.exe displays             # show displays and their parameters
+MonitorSwitch.exe set 1 refresh 144    # set display #1 to 144 Hz right now
+MonitorSwitch.exe set all hdr on       # turn HDR on for every display
+MonitorSwitch.exe topology clone       # projector shortcuts: internal|clone|extend|external
+```
+
+Commands are relayed to the running tray app (keeping hotkeys, tray menu and the
+15-second revert guard in sync); when the app is not running they execute directly.
+Add `--json` for machine-readable output. Full reference: [docs/cli.md](docs/cli.md).
 
 ### Where data lives
 

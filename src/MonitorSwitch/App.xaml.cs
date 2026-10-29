@@ -1,4 +1,5 @@
 using System.Windows;
+using MonitorSwitch.Cli;
 using MonitorSwitch.I18n;
 using System.Windows.Controls;
 using MonitorSwitch.Interop;
@@ -21,6 +22,7 @@ public partial class App : Application
     private MainWindow? _mainWindow;
     private TrayFlyoutWindow? _flyout;
     private ContextMenu? _trayMenu;
+    private CliPipeServer? _cliPipe;
 
     /// <summary>主窗口实例（关闭后由 MainWindow 自己置空，避免复用已关闭的窗口）。</summary>
     public MainWindow? MainWindowInstance
@@ -45,6 +47,25 @@ public partial class App : Application
             AppPaths.Log("未观察的任务异常: " + args.Exception);
             args.SetObserved();
         };
+
+        // CLI 模式必须最先截获：不进单实例、不碰托盘，命令执行完立即退出。
+        // 放在 TryBegin 之前，否则二次调用会误触发“唤起已有实例”。
+        //
+        // 执行放到独立线程：OnStartup 所在的主线程带着 WPF 的 Dispatcher 同步上下文，
+        // 在这里同步等待含 await 的 CLI 命令（如 displays）会把 await 延续卡死在
+        // 本线程上造成死锁。挪到普通线程后，await 延续在线程池恢复，直连模式下
+        // OnUi 的 Dispatcher.Invoke 也能投递到仍在泵消息的主线程；最后用
+        // Environment.Exit 带出退出码（托盘尚未初始化，无需走优雅关闭流程）。
+        if (CliHost.IsCliInvocation(e.Args))
+        {
+            var cli = new Thread(() => Environment.Exit(CliHost.Run(e.Args)))
+            {
+                IsBackground = false,
+            };
+            cli.SetApartmentState(ApartmentState.MTA);
+            cli.Start();
+            return;
+        }
 
         _single.ActivateRequested += ShowMainWindow;
         if (!_single.TryBegin())
@@ -73,6 +94,11 @@ public partial class App : Application
         _tray.Init(_messages.Handle, _trayIconHandle, Strings.T("App.Title"));
         _tray.LeftClick += ToggleFlyout;
         _tray.RightClick += ShowTrayMenu;
+
+        // CLI 管道服务：MonitorSwitch.exe <命令> 优先经它中继到本进程执行，
+        // 以复用模板存储、全局快捷键与还原保护；应用未运行时 CLI 会直连执行。
+        _cliPipe = new CliPipeServer(req => CliHost.ExecuteAsync(req, relayed: true));
+        _cliPipe.Start();
 
         var minimized = SettingsService.Instance.Current.StartMinimized
                         || e.Args.Any(a => a.Equals("--minimized", StringComparison.OrdinalIgnoreCase));
@@ -287,6 +313,7 @@ public partial class App : Application
             try { if (_trayMenu != null) _trayMenu.IsOpen = false; } catch { }
             try { _flyout?.Close(); } catch { }
             try { _mainWindow?.Close(); } catch { }
+            _cliPipe?.Dispose();
             _tray.Dispose();
             _hotkeys?.Dispose();
             _messages?.Dispose();

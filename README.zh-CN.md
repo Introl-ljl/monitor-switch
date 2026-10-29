@@ -34,6 +34,8 @@ MonitorSwitch 把整套配置存成一份**模板**。在托盘点一下，或�
 - **托盘面板** —— 左键点击托盘图标弹出快速切换面板，带迷你排列预览与投影快捷键
   （仅电脑屏幕 / 复制 / 扩展 / 仅第二屏幕）。面板可拖动，并记住你放的位置。
 - **全局快捷键** —— 任意模板可绑定 Ctrl/Alt/Shift/Win + 字母、数字或 F1–F24。
+- **命令行** —— 脚本中切换模板、修改分辨率/刷新率/方向/HDR，支持 `--json` 与稳定退出码。
+  见 [docs/cli.md](docs/cli.md)。
 - **浅色、深色或跟随系统**，**中文或 English** —— 无需重启即可切换。
 - **托盘常驻约 8 MB**。
 
@@ -83,6 +85,22 @@ MonitorSwitch 把整套配置存成一份**模板**。在托盘点一下，或�
 MonitorSwitch.exe              # 正常启动
 MonitorSwitch.exe --minimized  # 只驻留托盘，不显示主窗口
 ```
+
+配置模板与显示器参数也可以完全通过命令行操作——适合脚本、启动器与窗口管理器：
+
+```powershell
+MonitorSwitch.exe list                 # 列出模板，“*”为当前使用中
+MonitorSwitch.exe apply work           # 切换到模板 work
+MonitorSwitch.exe save gaming          # 把当前显示配置保存为模板
+MonitorSwitch.exe displays             # 列出显示器及其参数
+MonitorSwitch.exe set 1 refresh 144    # 把显示器 1 立即切到 144 Hz
+MonitorSwitch.exe set all hdr on       # 为所有显示器打开 HDR
+MonitorSwitch.exe topology clone       # 投影快捷模式：internal|clone|extend|external
+```
+
+应用正在运行时命令会中继给托盘实例（快捷键、托盘菜单与 15 秒还原保护保持一致）；
+未运行时则由 CLI 直接执行。加 `--json` 可获得机器可读输出。完整说明见
+[docs/cli.md](docs/cli.md)。
 
 ### 数据位置
 
