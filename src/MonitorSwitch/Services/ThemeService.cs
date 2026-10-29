@@ -161,6 +161,12 @@ public static class ThemeService
 
         app.Resources["AppCardBackgroundBrush"] = new SolidColorBrush(card);
         app.Resources["AppCardStrokeBrush"] = new SolidColorBrush(stroke);
+
+        // 强调色描边：用于“有未应用的更改”这类需要吸引注意但不刺眼的提示条
+        var accent = IsDark ? AccentPrimaryDark : AccentPrimaryLight;
+        app.Resources["AppAccentBorderBrush"] = new SolidColorBrush(
+            IsDark ? Color.FromArgb(0x66, accent.R, accent.G, accent.B)
+                   : Color.FromArgb(0x55, accent.R, accent.G, accent.B));
     }
 
     /// <summary>

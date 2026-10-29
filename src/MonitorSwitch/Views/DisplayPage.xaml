@@ -28,6 +28,36 @@
 
         <ui:InfoBar x:Name="ResultBar" IsOpen="False" IsClosable="True" Margin="0,0,0,14" />
 
+        <!-- 待应用提示条。
+             这一页的所有改动都只写进草稿，点“应用”才真正下发到系统，
+             避免动一下下拉框屏幕就闪一次。有未应用的改动时才出现。 -->
+        <Border x:Name="PendingBar" Visibility="Collapsed" Margin="0,0,0,14"
+                Background="{DynamicResource AppCardBackgroundBrush}"
+                BorderBrush="{DynamicResource AppAccentBorderBrush}"
+                BorderThickness="1" CornerRadius="8" Padding="14,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <ui:FontIcon Grid.Column="0" Glyph="&#xE7BA;" FontSize="16"
+                             VerticalAlignment="Center" Margin="0,0,10,0"
+                             Foreground="{DynamicResource SystemAccentColorBrush}" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="有尚未应用的更改" Style="{StaticResource SettingTitle}" />
+                    <TextBlock x:Name="PendingDesc" Style="{StaticResource SettingDesc}"
+                               Text="点击“应用”后生效，或点击“撤销”恢复为当前配置。" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:Button Content="应用" Appearance="Primary" MinWidth="80"
+                               Click="OnApplyPending" />
+                    <ui:Button Content="撤销" Appearance="Secondary" MinWidth="72" Margin="8,0,0,0"
+                               Click="OnDiscardPending" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- 排列 -->
         <Border Style="{StaticResource CardBorder}" Padding="10,10,10,8">
             <StackPanel>

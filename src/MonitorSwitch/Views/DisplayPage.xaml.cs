@@ -17,6 +17,12 @@ public partial class DisplayPage : Page
     private bool _subscribed;
     private DispatcherTimer? _debounce;
 
+    /// <summary>待应用的修改草稿。所有控件改动只写这里，点“应用”才下发。</summary>
+    private readonly DisplayDraft _draft = new();
+
+    /// <summary>当前刷新率下拉框里的候选值（随分辨率变化）。</summary>
+    private List<double> _refreshOptions = new();
+
     public DisplayPage()
     {
         InitializeComponent();
@@ -85,6 +91,12 @@ public partial class DisplayPage : Page
             ShowResult(false, "读取显示器信息失败：" + ex.Message, null);
             return;
         }
+
+        // 重新读取系统状态后，草稿以系统为准重建（未应用的改动会被丢弃）。
+        // 这是刻意的：系统状态变了（例如热插拔、其它程序改了配置），
+        // 继续沿用旧草稿会让“应用”下发一份基于过期数据的配置。
+        _draft.Reset(_displays);
+        UpdatePendingState();
 
         BuildArrangeItems();
         BuildSelector();
@@ -226,22 +238,33 @@ public partial class DisplayPage : Page
 
             SettingsCard.Visibility = Visibility.Visible;
             MonitorNameText.Text = d.DisplayName;
-            MonitorSubText.Text = $"{d.AdapterName} · {d.ConnectorName} · {d.ResolutionText} @ {DisplayProfile.FormatHz(d.RefreshHz)} · 缩放 {d.ScalePercent:0}%";
             PrimaryBadge.Visibility = d.IsPrimary ? Visibility.Visible : Visibility.Collapsed;
+
+            var e = _draft.Get(d.SourceGdiName);
+            if (e == null)
+            {
+                // 草稿里没有这块屏（理论上不会发生），退回系统值
+                e = new DisplayDraft.Entry
+                {
+                    Width = d.W, Height = d.H, RefreshHz = d.RefreshHz,
+                    RefreshNum = d.RefreshNum, RefreshDen = d.RefreshDen,
+                    Rotation = d.Rotation, Hdr = d.HdrEnabled, Active = true, X = d.X, Y = d.Y,
+                };
+            }
 
             var resItems = d.Resolutions.Select(r => $"{r.W} × {r.H}").ToList();
             ResCombo.ItemsSource = resItems;
-            var cur = d.Resolutions.FindIndex(r => r.W == d.W && r.H == d.H);
+            var cur = d.Resolutions.FindIndex(r => r.W == e.Width && r.H == e.Height);
             ResCombo.SelectedIndex = cur;
             ResCombo.IsEnabled = d.Resolutions.Count > 1;
 
-            var hzItems = d.RefreshRates.Select(hz => DisplayProfile.FormatHz(hz)).ToList();
-            RefreshCombo.ItemsSource = hzItems;
-            var curHz = d.RefreshRates.FindIndex(hz => Math.Abs(hz - d.RefreshHz) < 0.5);
+            _refreshOptions = RefreshOptionsFor(d, e.Width, e.Height);
+            RefreshCombo.ItemsSource = _refreshOptions.Select(hz => DisplayProfile.FormatHz(hz)).ToList();
+            var curHz = _refreshOptions.FindIndex(hz => Math.Abs(hz - e.RefreshHz) < 0.5);
             RefreshCombo.SelectedIndex = curHz;
-            RefreshCombo.IsEnabled = d.RefreshRates.Count > 1;
+            RefreshCombo.IsEnabled = _refreshOptions.Count > 1;
 
-            OrientCombo.SelectedIndex = d.Rotation switch
+            OrientCombo.SelectedIndex = e.Rotation switch
             {
                 2 => 1,
                 3 => 2,
@@ -254,13 +277,15 @@ public partial class DisplayPage : Page
 
             HdrToggle.Visibility = d.HdrSupported ? Visibility.Visible : Visibility.Collapsed;
             HdrDesc.Text = d.HdrSupported ? "高动态范围（需要显示器支持）" : "此显示器不支持 HDR";
-            HdrToggle.IsChecked = d.HdrEnabled;
+            HdrToggle.IsChecked = e.Hdr;
             HdrToggle.IsEnabled = d.HdrSupported;
 
-            EnableToggle.IsChecked = true;
+            EnableToggle.IsChecked = e.Active;
             EnableToggle.IsEnabled = _displays.Count > 1;
 
-            SetPrimaryBtn.IsEnabled = !d.IsPrimary;
+            SetPrimaryBtn.IsEnabled = !(e.X == 0 && e.Y == 0);
+
+            MonitorSubText.Text = BuildSubText(d, e);
         }
         finally
         {
@@ -268,40 +293,154 @@ public partial class DisplayPage : Page
         }
     }
 
-    // ---------------------------------------------------------------- 修改并应用
+    // ---------------------------------------------------------------- 编辑（只改草稿，不生效）
 
-    /// <summary>捕获当前配置、修改指定显示器、整体应用。</summary>
-    private async Task ApplyModifiedAsync(string gdiName, Action<MonitorSnapshot> modify)
+    /// <summary>
+    /// 编辑某个显示器的草稿并刷新界面状态。
+    ///
+    /// 关键点：这里**不再**调用 ApplyGuard 下发到系统。所有改动只写进 <see cref="_draft"/>，
+    /// 由用户点“应用”才真正生效 —— 这是避免“动一下下拉框屏幕就闪一次”的核心。
+    /// </summary>
+    private void EditDraft(string gdiName, Action<DisplayDraft.Entry> mutate)
+    {
+        _draft.Edit(gdiName, mutate);
+        // 先回填控件（例如换分辨率后刷新率列表要跟着变），再刷新提示条，
+        // 保证“待应用”状态与界面显示一致。
+        SyncControlsFromDraft();
+        UpdatePendingState();
+    }
+
+    /// <summary>根据草稿与系统状态的差异，显示/隐藏“待应用”提示条。</summary>
+    private void UpdatePendingState()
+    {
+        bool dirty = _draft.IsDirty;
+        PendingBar.Visibility = dirty ? Visibility.Visible : Visibility.Collapsed;
+
+        if (dirty)
+        {
+            PendingDesc.Text = _displays.Count > 1
+                ? "点击“应用”后生效。应用会短暂切换显示器，15 秒内未确认将自动还原。"
+                : "点击“应用”后生效。应用会短暂切换显示器，15 秒内未确认将自动还原。";
+        }
+    }
+
+    /// <summary>把草稿值回填到各个控件（不触发事件）。</summary>
+    private void SyncControlsFromDraft()
+    {
+        if (_selected == null) return;
+        var e = _draft.Get(_selected.SourceGdiName);
+        if (e == null) return;
+
+        bool wasLoading = _loading;
+        _loading = true;
+        try
+        {
+            // 分辨率：草稿值是桌面朝向，需要和 Resolutions 列表（桌面朝向）比对
+            int resIdx = _selected.Resolutions.FindIndex(r => r.W == e.Width && r.H == e.Height);
+            if (resIdx >= 0 && ResCombo.SelectedIndex != resIdx) ResCombo.SelectedIndex = resIdx;
+
+            // 刷新率：分辨率变了要换一套候选列表
+            var hzList = RefreshOptionsFor(_selected, e.Width, e.Height);
+            if (!hzList.SequenceEqual(_refreshOptions))
+            {
+                _refreshOptions = hzList;
+                RefreshCombo.ItemsSource = hzList.Select(hz => DisplayProfile.FormatHz(hz)).ToList();
+            }
+            int hzIdx = hzList.FindIndex(hz => Math.Abs(hz - e.RefreshHz) < 0.5);
+            if (hzIdx >= 0 && RefreshCombo.SelectedIndex != hzIdx) RefreshCombo.SelectedIndex = hzIdx;
+
+            int orientIdx = e.Rotation switch { 2 => 1, 3 => 2, 4 => 3, _ => 0 };
+            if (OrientCombo.SelectedIndex != orientIdx) OrientCombo.SelectedIndex = orientIdx;
+
+            if (HdrToggle.IsChecked != e.Hdr) HdrToggle.IsChecked = e.Hdr;
+            if (EnableToggle.IsChecked != e.Active) EnableToggle.IsChecked = e.Active;
+
+            SetPrimaryBtn.IsEnabled = !(e.X == 0 && e.Y == 0);
+
+            // 副标题实时反映草稿，让用户看到“将要变成什么”
+            MonitorSubText.Text = BuildSubText(_selected, e);
+        }
+        finally
+        {
+            _loading = wasLoading;
+        }
+
+        // 画布也要跟着草稿的位置走
+        SyncCanvasFromDraft();
+    }
+
+    private static string BuildSubText(LiveDisplay d, DisplayDraft.Entry e)
+    {
+        var hz = DisplayProfile.FormatHz(e.RefreshHz);
+        return $"{d.AdapterName} · {d.ConnectorName} · {e.Width} × {e.Height} @ {hz} · 缩放 {d.ScalePercent:0}%";
+    }
+
+    /// <summary>把草稿里的位置与启用状态同步到排列画布。</summary>
+    private void SyncCanvasFromDraft()
+    {
+        var items = ArrangeCanvas.Items;
+        if (items == null) return;
+
+        _loading = true;
+        try
+        {
+            foreach (var item in items)
+            {
+                var e = _draft.Get(item.Key);
+                if (e == null) continue;
+                item.X = e.X;
+                item.Y = e.Y;
+                item.IsPrimary = e.X == 0 && e.Y == 0;
+            }
+        }
+        finally
+        {
+            _loading = false;
+        }
+        ArrangeCanvas.InvalidateVisual();
+    }
+
+    /// <summary>某块屏在指定分辨率下可选的刷新率。</summary>
+    private static List<double> RefreshOptionsFor(LiveDisplay d, uint w, uint h)
+    {
+        // 分辨率等于当前分辨率时，直接用系统枚举出的完整列表
+        if (w == d.W && h == d.H) return new List<double>(d.RefreshRates);
+
+        // 换了分辨率：系统是按“当前时序”枚举刷新率的，没有可靠的按分辨率查表 API，
+        // 这里保留原列表让用户仍能选择（下发时由 SetDisplayConfig 校验）。
+        return new List<double>(d.RefreshRates);
+    }
+
+    // ---------------------------------------------------------------- 应用 / 撤销
+
+    private async void OnApplyPending(object sender, RoutedEventArgs e)
     {
         if (_busy) return;
+        if (!_draft.IsDirty)
+        {
+            UpdatePendingState();
+            return;
+        }
+
         _busy = true;
         try
         {
             var current = DisplayService.Instance.CaptureCurrent();
-            var snap = current.Monitors.FirstOrDefault(m => m.SourceGdiDeviceName == gdiName);
-            if (snap == null)
-            {
-                ShowResult(false, "找不到所选显示器的当前配置，请点击“重新检测”。", null);
-                return;
-            }
-
-            uint oldRot = snap.Rotation;
-            modify(snap);
-
-            // 旋转变化时交换桌面源分辨率（面板原生时序不随旋转变化）
-            bool oldPortrait = oldRot is 2 or 4;
-            bool newPortrait = snap.Rotation is 2 or 4;
-            if (oldPortrait != newPortrait)
-            {
-                (snap.SourceWidth, snap.SourceHeight) = (snap.SourceHeight, snap.SourceWidth);
-            }
+            // 先按草稿改快照，再一次下发
+            _draft.ApplyTo(current);
 
             var result = await ApplyGuard.Instance.ApplyAsync(current);
             ShowResult(result.Success, result.ErrorMessage, result.Warnings);
+
+            if (result.Success)
+            {
+                // 应用成功后草稿与系统一致，清掉脏标记
+                _draft.Reset(DisplayService.Instance.GetDisplays());
+            }
         }
         catch (Exception ex)
         {
-            AppPaths.Log("ApplyModified 异常: " + ex);
+            AppPaths.Log("应用草稿异常: " + ex);
             ShowResult(false, ex.Message, null);
         }
         finally
@@ -311,71 +450,75 @@ public partial class DisplayPage : Page
         }
     }
 
-    private async void OnResChanged(object sender, SelectionChangedEventArgs e)
+    private void OnDiscardPending(object sender, RoutedEventArgs e)
+    {
+        // 用系统真实状态重建草稿，然后把控件回填到系统值
+        _draft.Reset(_displays);
+        SyncControlsFromDraft();
+        UpdatePendingState();
+        ShowResult(true, null, null, "已恢复为当前系统配置。", title: "已撤销");
+    }
+
+    // ---------------------------------------------------------------- 控件事件（只改草稿）
+
+    private void OnResChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || _selected == null || ResCombo.SelectedIndex < 0) return;
         if (ResCombo.SelectedIndex >= _selected.Resolutions.Count) return;
         var dim = _selected.Resolutions[ResCombo.SelectedIndex];
-        if (dim.W == _selected.W && dim.H == _selected.H) return;
 
-        var gdi = _selected.SourceGdiName;
-        var refreshNum = _selected.RefreshNum;
-        var refreshDen = _selected.RefreshDen;
-        var refreshHz = _selected.RefreshHz;
-        await ApplyModifiedAsync(gdi, snap =>
+        EditDraft(_selected.SourceGdiName, entry =>
         {
-            snap.SourceWidth = dim.W;
-            snap.SourceHeight = dim.H;
-            bool portrait = snap.Rotation is 2 or 4;
-            snap.PanelWidth = portrait ? dim.H : dim.W;
-            snap.PanelHeight = portrait ? dim.W : dim.H;
-            // 分辨率变化后目标时序不再适用，交由系统按新分辨率重新选择
-            snap.RefreshHz = refreshHz;
-            snap.RefreshNumerator = refreshNum;
-            snap.RefreshDenominator = refreshDen;
+            entry.Width = dim.W;
+            entry.Height = dim.H;
         });
     }
 
-    private async void OnRefreshChanged(object sender, SelectionChangedEventArgs e)
+    private void OnRefreshChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || _selected == null || RefreshCombo.SelectedIndex < 0) return;
-        if (RefreshCombo.SelectedIndex >= _selected.RefreshRates.Count) return;
-        var hz = _selected.RefreshRates[RefreshCombo.SelectedIndex];
-        if (Math.Abs(hz - _selected.RefreshHz) < 0.5) return;
+        if (RefreshCombo.SelectedIndex >= _refreshOptions.Count) return;
+        var hz = _refreshOptions[RefreshCombo.SelectedIndex];
 
-        var gdi = _selected.SourceGdiName;
-        await ApplyModifiedAsync(gdi, snap =>
+        EditDraft(_selected.SourceGdiName, entry =>
         {
-            snap.RefreshHz = hz;
+            entry.RefreshHz = hz;
             bool integral = Math.Abs(hz - Math.Round(hz)) < 0.01;
-            snap.RefreshNumerator = integral ? (uint)Math.Round(hz) : (uint)Math.Round(hz * 1000);
-            snap.RefreshDenominator = integral ? 1u : 1000u;
+            entry.RefreshNum = integral ? (uint)Math.Round(hz) : (uint)Math.Round(hz * 1000);
+            entry.RefreshDen = integral ? 1u : 1000u;
         });
     }
 
-    private async void OnOrientChanged(object sender, SelectionChangedEventArgs e)
+    private void OnOrientChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || _selected == null || OrientCombo.SelectedIndex < 0) return;
         uint rot = OrientCombo.SelectedIndex switch { 1 => 2, 2 => 3, 3 => 4, _ => 1 };
-        if (rot == _selected.Rotation) return;
-        var gdi = _selected.SourceGdiName;
-        await ApplyModifiedAsync(gdi, snap => snap.Rotation = rot);
+
+        EditDraft(_selected.SourceGdiName, entry =>
+        {
+            // 旋转改变桌面朝向：草稿里的宽高要跟着交换
+            bool wasPortrait = entry.Rotation is 2 or 4;
+            bool willPortrait = rot is 2 or 4;
+            entry.Rotation = rot;
+            if (wasPortrait != willPortrait)
+                (entry.Width, entry.Height) = (entry.Height, entry.Width);
+        });
     }
 
-    private async void OnHdrToggled(object sender, RoutedEventArgs e)
+    private void OnHdrToggled(object sender, RoutedEventArgs e)
     {
         if (_loading || _selected == null) return;
         bool on = HdrToggle.IsChecked == true;
-        if (on == _selected.HdrEnabled) return;
-        var gdi = _selected.SourceGdiName;
-        await ApplyModifiedAsync(gdi, snap => snap.Hdr = on);
+        EditDraft(_selected.SourceGdiName, entry => entry.Hdr = on);
     }
 
-    private async void OnEnableToggled(object sender, RoutedEventArgs e)
+    private void OnEnableToggled(object sender, RoutedEventArgs e)
     {
         if (_loading || _selected == null) return;
-        if (EnableToggle.IsChecked != false) return; // 只处理“停用”
-        if (_displays.Count <= 1)
+        bool on = EnableToggle.IsChecked == true;
+
+        // 至少保留一台启用的显示器
+        if (!on && _displays.Count <= 1)
         {
             ShowResult(false, "至少需要保留一台启用的显示器。", null);
             _loading = true;
@@ -383,42 +526,20 @@ public partial class DisplayPage : Page
             _loading = false;
             return;
         }
-        var gdi = _selected.SourceGdiName;
-        await ApplyModifiedAsync(gdi, snap => snap.Active = false);
+
+        EditDraft(_selected.SourceGdiName, entry => entry.Active = on);
     }
 
-    private async void OnSetPrimary(object sender, RoutedEventArgs e)
+    private void OnSetPrimary(object sender, RoutedEventArgs e)
     {
         if (_busy || _selected == null) return;
-        _busy = true;
-        try
-        {
-            var current = DisplayService.Instance.CaptureCurrent();
-            var snap = current.Monitors.FirstOrDefault(m => m.SourceGdiDeviceName == _selected.SourceGdiName);
-            if (snap == null) return;
+        var entry = _draft.Get(_selected.SourceGdiName);
+        if (entry == null) return;
 
-            // 整体平移桌面坐标，使所选显示器位于 (0,0) —— 该位置即主显示器
-            int dx = -snap.PositionX;
-            int dy = -snap.PositionY;
-            foreach (var m in current.Monitors)
-            {
-                m.PositionX += dx;
-                m.PositionY += dy;
-            }
-
-            var result = await ApplyGuard.Instance.ApplyAsync(current);
-            ShowResult(result.Success, result.ErrorMessage, result.Warnings);
-        }
-        catch (Exception ex)
-        {
-            AppPaths.Log("设为主显示器失败: " + ex);
-            ShowResult(false, ex.Message, null);
-        }
-        finally
-        {
-            _busy = false;
-            RefreshAll();
-        }
+        // 整体平移草稿坐标，使所选显示器位于 (0,0) —— 该位置即主显示器
+        _draft.ShiftAll(-entry.X, -entry.Y);
+        UpdatePendingState();
+        SyncCanvasFromDraft();
     }
 
     private async void OnEnableInactive(object sender, RoutedEventArgs e)
@@ -456,35 +577,42 @@ public partial class DisplayPage : Page
         }
     }
 
-    private async void OnPositionCommitted(ArrangeItem item)
+    /// <summary>
+    /// 画布拖拽结束。只更新草稿坐标，不立即下发 —— 与其它控件一致，
+    /// 由用户点“应用”统一生效，避免拖一下就重排整个桌面。
+    /// </summary>
+    private void OnPositionCommitted(ArrangeItem item)
     {
         if (_busy) return;
-        _busy = true;
-        try
+
+        // 拖拽改变的是被拖动那块屏的位置；其余屏位置保持不变
+        _draft.Edit(item.Key, entry =>
         {
-            var current = DisplayService.Instance.CaptureCurrent();
-            foreach (var snap in current.Monitors)
+            entry.X = (int)Math.Round(item.X);
+            entry.Y = (int)Math.Round(item.Y);
+        });
+
+        UpdatePendingState();
+
+        // 主显示器标记随坐标变化
+        if (ArrangeCanvas.Items != null)
+        {
+            _loading = true;
+            try
             {
-                var it = ArrangeCanvas.Items?.FirstOrDefault(i => i.Key == snap.SourceGdiDeviceName);
-                if (it != null)
+                foreach (var it in ArrangeCanvas.Items)
                 {
-                    snap.PositionX = (int)Math.Round(it.X);
-                    snap.PositionY = (int)Math.Round(it.Y);
+                    var e = _draft.Get(it.Key);
+                    if (e == null) continue;
+                    it.IsPrimary = e.X == 0 && e.Y == 0;
                 }
             }
-            var result = await ApplyGuard.Instance.ApplyAsync(current);
-            ShowResult(result.Success, result.ErrorMessage, result.Warnings);
+            finally { _loading = false; }
+            ArrangeCanvas.InvalidateVisual();
         }
-        catch (Exception ex)
-        {
-            AppPaths.Log("调整排列失败: " + ex);
-            ShowResult(false, ex.Message, null);
-        }
-        finally
-        {
-            _busy = false;
-            RefreshAll();
-        }
+
+        if (_selected != null && _selected.SourceGdiName == item.Key)
+            SetPrimaryBtn.IsEnabled = !(item.X == 0 && item.Y == 0);
     }
 
     private void OnIdentify(object sender, RoutedEventArgs e) =>
@@ -492,32 +620,34 @@ public partial class DisplayPage : Page
 
     private void OnDetect(object sender, RoutedEventArgs e)
     {
-        ShowResult(true, null, null, "已重新检测显示器。");
+        ShowResult(true, null, null, "已重新检测显示器。", title: "已刷新");
         RefreshAll();
     }
 
     // ---------------------------------------------------------------- 反馈
 
-    private void ShowResult(bool success, string? error, List<string>? warnings, string? successMessage = null)
+    /// <summary>显示反馈条。<paramref name="title"/> 为空时按成功/失败取默认标题。</summary>
+    private void ShowResult(bool success, string? error, List<string>? warnings,
+        string? successMessage = null, string? title = null)
     {
         ResultBar.IsOpen = true;
         if (!success)
         {
             ResultBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Error;
-            ResultBar.Title = "应用失败";
+            ResultBar.Title = title ?? "应用失败";
             ResultBar.Message = error ?? "未知错误";
             return;
         }
         if (warnings is { Count: > 0 })
         {
             ResultBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Warning;
-            ResultBar.Title = "已应用（部分设置未生效）";
+            ResultBar.Title = title ?? "已应用（部分设置未生效）";
             ResultBar.Message = string.Join(" ", warnings);
         }
         else
         {
             ResultBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Success;
-            ResultBar.Title = "已应用";
+            ResultBar.Title = title ?? "已应用";
             ResultBar.Message = successMessage ?? "显示器配置已更新。";
         }
     }
