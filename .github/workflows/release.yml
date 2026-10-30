@@ -21,6 +21,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 手动补发时必须检出目标 tag：默认会检出默认分支，
+          # 会把“分支代码”打上输入的 tag 发布，造成 tag 与二进制错位
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4

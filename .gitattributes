@@ -1,0 +1,8 @@
+# 行尾统一：文本文件入库为 LF，按平台检出
+* text=auto
+
+# 二进制资产不做行尾转换
+*.png binary
+*.ico binary
+*.jpg binary
+*.woff binary

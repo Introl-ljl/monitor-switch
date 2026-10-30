@@ -12,17 +12,8 @@ obj/
 # ---- 调试探针程序（仅本地用于验证渲染/内存，非产品代码）----
 /probe/
 
-# ---- 排查 UI 问题时产生的一次性截图与对比图 ----
-_*.png
-preview.png
-preview-*.png
-fixed.png
-fixed-*.png
-final.png
-final-*.png
-font-*.png
-kb-nav.png
-nav-test.png
+# ---- 排查 UI 问题/渲染对比时产生的一次性截图（统一收进 tmp-shots，避免逐文件枚举）----
+/tmp-shots/
 
 # ---- 构建/工具临时文件 ----
 [Bb]uild[Ll]ogs/

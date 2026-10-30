@@ -131,7 +131,7 @@ dotnet build src/MonitorSwitch/MonitorSwitch.csproj -c Release
 dotnet run --project src/MonitorSwitch/MonitorSwitch.csproj
 ```
 
-Produce the same single-file binary that ships in releases:
+Produce the same single-file binary that ships in releases (or run `scripts/publish.ps1`):
 
 ```powershell
 dotnet publish src/MonitorSwitch/MonitorSwitch.csproj `

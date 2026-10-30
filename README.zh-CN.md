@@ -123,7 +123,7 @@ dotnet build src/MonitorSwitch/MonitorSwitch.csproj -c Release
 dotnet run --project src/MonitorSwitch/MonitorSwitch.csproj
 ```
 
-打包成与 Release 一致的单文件：
+打包成与 Release 一致的单文件（或直接运行 `scripts/publish.ps1`）：
 
 ```powershell
 dotnet publish src/MonitorSwitch/MonitorSwitch.csproj `

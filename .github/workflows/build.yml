@@ -17,8 +17,27 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
       - name: Restore
         run: dotnet restore src/MonitorSwitch/MonitorSwitch.csproj
 
       - name: Build
         run: dotnet build src/MonitorSwitch/MonitorSwitch.csproj -c Release --no-restore -warnaserror
+
+      - name: Test
+        # 不加 --no-build：Build 步骤只构建了主工程，测试工程（含其引用）在这里构建
+        run: dotnet test tests/MonitorSwitch.Tests/MonitorSwitch.Tests.csproj -c Release
+
+      # PR 上直接拿到可运行的 exe，方便按 CONTRIBUTING 的要求实机验证显示类改动
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MonitorSwitch-win-x64
+          path: src/MonitorSwitch/bin/Release/net8.0-windows/MonitorSwitch.exe
+          if-no-files-found: error
