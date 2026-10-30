@@ -26,6 +26,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 测试工程访问 internal 成员（CLI 解析器、Salvage、NormalizeRefresh 等纯逻辑） -->
+    <InternalsVisibleTo Include="MonitorSwitch.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Assets\app.ico" />
   </ItemGroup>
 
