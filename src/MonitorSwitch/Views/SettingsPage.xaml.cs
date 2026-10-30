@@ -53,6 +53,11 @@ public partial class SettingsPage : Page
 
     private void FlashSaved()
     {
+        // 重置为成功态：上一次失败（如自启动写注册表被拦截）留下的 Error 标题与
+        // 错误文案如果不还原，用户改任意设置都会看到“顶着旧错误的成功提示”
+        SavedBar.Severity = Wpf.Ui.Controls.InfoBarSeverity.Success;
+        SavedBar.Title = Strings.T("Settings.Saved");
+        SavedBar.Message = string.Empty;
         SavedBar.IsOpen = true;
     }
 

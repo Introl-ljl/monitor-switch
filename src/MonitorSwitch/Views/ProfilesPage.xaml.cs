@@ -81,8 +81,10 @@ public partial class ProfilesPage : Page
                     var vm = new ProfileCardVM(p, DisplayService.Instance.MatchesCurrent(p, cur));
                     if (editing.TryGetValue(p.Id, out var prev))
                     {
+                        // 注意顺序：IsRenaming 的 setter 会用 Profile.Name 重置 EditName，
+                        // 必须先置标志再回填文本，否则重建列表时输入到一半的改名会丢失
+                        if (prev.IsRenaming) vm.IsRenaming = true;
                         vm.EditName = prev.EditName;
-                        vm.IsRenaming = prev.IsRenaming;
                         vm.IsEditingHotkey = prev.IsEditingHotkey;
                     }
                     return vm;
@@ -341,7 +343,8 @@ public partial class ProfilesPage : Page
         if (dlg.ShowDialog() != true) return;
         try
         {
-            var list = JsonSerializer.Deserialize<List<DisplayProfile>>(File.ReadAllText(dlg.FileName));
+            // 与 profiles.json 的加载同一套选项：容忍手编文件的注释/尾逗号与大小写差异
+            var list = JsonSerializer.Deserialize<List<DisplayProfile>>(File.ReadAllText(dlg.FileName), ProfileStore.JsonOptions);
             if (list == null || list.Count == 0)
             {
                 ShowResult(false, Strings.T("Msg.NothingToImport"), null);
@@ -356,8 +359,10 @@ public partial class ProfilesPage : Page
             foreach (var p in list)
             {
                 if (p == null) continue;
-                // 导入的模板必须至少有一台显示器，否则无法应用
-                if (p.Monitors == null || p.Monitors.Count == 0) { skipped++; continue; }
+                // 导入的模板必须至少有一台显示器，否则无法应用；null 元素一并清掉
+                if (p.Monitors is null) { skipped++; continue; }
+                p.Monitors.RemoveAll(m => m is null);
+                if (p.Monitors.Count == 0) { skipped++; continue; }
 
                 p.Id = Guid.NewGuid().ToString("N"); // 避免与现有 Id 冲突
                 // 快捷键可能与本机已有绑定冲突，导入时不保留

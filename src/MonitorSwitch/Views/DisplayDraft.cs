@@ -8,6 +8,10 @@ namespace MonitorSwitch.Views;
 /// 设计目的：显示器页的所有改动（分辨率/刷新率/方向/HDR/启用/主屏/排列位置）
 /// 都先写进这里，只有用户点“应用”才真正下发到系统，避免改一个下拉框
 /// 就让屏幕闪一下。草稿以 SourceGdiName 为键，与 <see cref="LiveDisplay"/> 对应。
+///
+/// 刻意为之：克隆组共享同一个源，因此也共享同一条草稿 —— 选中克隆组里任意
+/// 一块屏编辑，整组一起变。这与 CCD 的源模式共享语义一致；若未来加入
+/// per-target 的设置项，需先把键改成 TargetDevicePath。
 /// </summary>
 internal sealed class DisplayDraft
 {
@@ -117,19 +121,11 @@ internal sealed class DisplayDraft
             var e = Get(mon.SourceGdiDeviceName);
             if (e is null) continue;
 
-            bool oldPortrait = mon.Rotation is 2 or 4;
             mon.Rotation = e.Rotation;
-            bool newPortrait = mon.Rotation is 2 or 4;
 
-            // 源模式始终按面板朝向：旋转变化时交换宽高
-            if (oldPortrait != newPortrait)
-            {
-                (mon.SourceWidth, mon.SourceHeight) = (mon.SourceHeight, mon.SourceWidth);
-            }
-
-            // 草稿里的 Width/Height 是桌面朝向，需要按当前旋转换算回面板朝向
-            uint srcW = newPortrait ? e.Height : e.Width;
-            uint srcH = newPortrait ? e.Width : e.Height;
+            // 草稿里的 Width/Height 是桌面朝向，需要按旋转后的朝向换算回面板朝向
+            uint srcW = e.Rotation is 2 or 4 ? e.Height : e.Width;
+            uint srcH = e.Rotation is 2 or 4 ? e.Width : e.Height;
             mon.SourceWidth = srcW;
             mon.SourceHeight = srcH;
             mon.PanelWidth = srcW;

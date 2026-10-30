@@ -79,7 +79,7 @@ public partial class DisplayPage : Page
 
     // ---------------------------------------------------------------- 数据加载
 
-    private void RefreshAll()
+    private void RefreshAll(bool resetDraft = true)
     {
         try
         {
@@ -93,10 +93,14 @@ public partial class DisplayPage : Page
             return;
         }
 
-        // 重新读取系统状态后，草稿以系统为准重建（未应用的改动会被丢弃）。
-        // 这是刻意的：系统状态变了（例如热插拔、其它程序改了配置），
-        // 继续沿用旧草稿会让“应用”下发一份基于过期数据的配置。
-        _draft.Reset(_displays);
+        if (resetDraft)
+        {
+            // 重新读取系统状态后，草稿以系统为准重建（未应用的改动会被丢弃）。
+            // 这是刻意的：系统状态变了（例如热插拔、其它程序改了配置），
+            // 继续沿用旧草稿会让“应用”下发一份基于过期数据的配置。
+            // resetDraft=false 用于“应用失败后保留草稿”的路径。
+            _draft.Reset(_displays);
+        }
         UpdatePendingState();
 
         BuildArrangeItems();
@@ -104,10 +108,9 @@ public partial class DisplayPage : Page
         BuildInactiveList();
 
         // 保持选中同一块屏幕（按源名匹配，源名在同一会话内稳定）
-        LiveDisplay? keep = null;
-        if (_selected != null)
-            keep = _displays.FirstOrDefault(d => d.SourceGdiName == _selected.SourceGdiName);
-        keep ??= _displays.FirstOrDefault(d => d.SourceGdiName == _selected?.SourceGdiName);
+        var keep = _selected == null
+            ? null
+            : _displays.FirstOrDefault(d => d.SourceGdiName == _selected.SourceGdiName);
         SelectMonitor(keep ?? _displays.FirstOrDefault());
     }
 
@@ -314,15 +317,9 @@ public partial class DisplayPage : Page
     /// <summary>根据草稿与系统状态的差异，显示/隐藏“待应用”提示条。</summary>
     private void UpdatePendingState()
     {
-        bool dirty = _draft.IsDirty;
-        PendingBar.Visibility = dirty ? Visibility.Visible : Visibility.Collapsed;
-
-        if (dirty)
-        {
-            PendingDesc.Text = _displays.Count > 1
-                ? "点击“应用”后生效。应用会短暂切换显示器，15 秒内未确认将自动还原。"
-                : "点击“应用”后生效。应用会短暂切换显示器，15 秒内未确认将自动还原。";
-        }
+        // 文案由 XAML 的索引器绑定 [Display.Pending.Desc] 提供，随语言切换自动刷新；
+        // 这里只负责可见性，代码里覆写 Text 会切断绑定并在英文界面夹出中文。
+        PendingBar.Visibility = _draft.IsDirty ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>把草稿值回填到各个控件（不触发事件）。</summary>
@@ -337,7 +334,16 @@ public partial class DisplayPage : Page
         try
         {
             // 分辨率：草稿值是桌面朝向，需要和 Resolutions 列表（桌面朝向）比对
+            var resItems = ResCombo.ItemsSource as List<string> ?? _selected.Resolutions.Select(r => $"{r.W} × {r.H}").ToList();
             int resIdx = _selected.Resolutions.FindIndex(r => r.W == e.Width && r.H == e.Height);
+            if (resIdx < 0)
+            {
+                // 旋转成竖屏后 GDI 枚举（按当前朝向）可能不含草稿分辨率：
+                // 插入一项让下拉框与“将要应用的内容”保持一致，避免视觉脱节
+                resItems = new List<string>(resItems) { $"{e.Width} × {e.Height}" };
+                resIdx = resItems.Count - 1;
+                ResCombo.ItemsSource = resItems;
+            }
             if (resIdx >= 0 && ResCombo.SelectedIndex != resIdx) ResCombo.SelectedIndex = resIdx;
 
             // 刷新率：分辨率变了要换一套候选列表
@@ -404,11 +410,8 @@ public partial class DisplayPage : Page
     /// <summary>某块屏在指定分辨率下可选的刷新率。</summary>
     private static List<double> RefreshOptionsFor(LiveDisplay d, uint w, uint h)
     {
-        // 分辨率等于当前分辨率时，直接用系统枚举出的完整列表
-        if (w == d.W && h == d.H) return new List<double>(d.RefreshRates);
-
-        // 换了分辨率：系统是按“当前时序”枚举刷新率的，没有可靠的按分辨率查表 API，
-        // 这里保留原列表让用户仍能选择（下发时由 SetDisplayConfig 校验）。
+        // 系统按“当前时序”枚举刷新率，没有按分辨率查表的公开 API；
+        // 换分辨率时沿用原列表，下发由 SetDisplayConfig 校验。
         return new List<double>(d.RefreshRates);
     }
 
@@ -423,6 +426,8 @@ public partial class DisplayPage : Page
             return;
         }
 
+        // keepDraft 默认 true（保留）：失败/异常路径都不丢用户改到一半的草稿
+        bool keepDraft = true;
         _busy = true;
         try
         {
@@ -436,6 +441,7 @@ public partial class DisplayPage : Page
             if (result.Success)
             {
                 // 应用成功后草稿与系统一致，清掉脏标记
+                keepDraft = false;
                 _draft.Reset(DisplayService.Instance.GetDisplays());
             }
         }
@@ -447,7 +453,7 @@ public partial class DisplayPage : Page
         finally
         {
             _busy = false;
-            RefreshAll();
+            RefreshAll(resetDraft: !keepDraft);
         }
     }
 
@@ -547,12 +553,18 @@ public partial class DisplayPage : Page
     {
         if (_busy) return;
         if (sender is not Wpf.Ui.Controls.Button { Tag: string path }) return;
+        bool keepDraft = true;
         _busy = true;
         try
         {
             var current = DisplayService.Instance.CaptureCurrent();
+            // 待应用草稿一并带入：用户改了一半的分辨率/位置不该被“启用显示器”静默丢弃
+            _draft.ApplyTo(current);
+
+            // 落位按“桌面朝向”宽高算右边界（SourceWidth 是面板朝向，竖屏时会算错：
+            // 横板竖用高估出大缝、竖板横用低估导致重叠）
             var act = current.Monitors.Where(m => m.Active).ToList();
-            int rightX = act.Count > 0 ? act.Max(m => m.PositionX + (int)m.SourceWidth) : 0;
+            int rightX = act.Count > 0 ? act.Max(m => m.PositionX + (int)m.DesktopWidth) : 0;
             int topY = act.Count > 0 ? act.Min(m => m.PositionY) : 0;
 
             var snap = DisplayService.Instance.BuildSnapshotForTarget(path, rightX, topY);
@@ -565,6 +577,7 @@ public partial class DisplayPage : Page
 
             var result = await ApplyGuard.Instance.ApplyAsync(current);
             ShowResult(result.Success, result.ErrorMessage, result.Warnings);
+            if (result.Success) keepDraft = false;
         }
         catch (Exception ex)
         {
@@ -574,7 +587,7 @@ public partial class DisplayPage : Page
         finally
         {
             _busy = false;
-            RefreshAll();
+            RefreshAll(resetDraft: !keepDraft);
         }
     }
 

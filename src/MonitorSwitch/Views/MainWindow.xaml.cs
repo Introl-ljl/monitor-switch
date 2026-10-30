@@ -83,7 +83,10 @@ public partial class MainWindow : FluentWindow
 
     private void OnClosing(object? sender, CancelEventArgs e)
     {
-        if (App.IsExiting) return;
+        // 退出中，或 ReleaseMainWindow 正在执行“销毁窗口”：放行真正的 Close。
+        // 若没有这条旁路，CloseToTray 时 e.Cancel 会把销毁流程自己发起的
+        // Close() 也取消掉，窗口永远走不到 Closed，渲染管线内存无法归还。
+        if (App.IsExiting || App.ReleasingWindow) return;
 
         if (SettingsService.Instance.Current.CloseToTray)
         {

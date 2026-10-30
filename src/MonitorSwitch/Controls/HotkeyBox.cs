@@ -114,7 +114,7 @@ public sealed class HotkeyBox : Wpf.Ui.Controls.Button
 
     private static bool TryKeyText(Key key, out string text)
     {
-        // 数字键：主键盘 D0-D9 与数字小键盘 NumPad0-9
+        // 产出的 token 必须能被 HotkeyService.TryParse 回读（含 NumPad 与 OEM 键的命名形式）
         if (key is >= Key.D0 and <= Key.D9)
         {
             text = ((int)(key - Key.D0)).ToString();
@@ -122,7 +122,8 @@ public sealed class HotkeyBox : Wpf.Ui.Controls.Button
         }
         if (key is >= Key.NumPad0 and <= Key.NumPad9)
         {
-            text = ((int)(key - Key.NumPad0)).ToString();
+            // 用 "NumPadN" 命名而不是数字：注册的是小键盘 VK，主键盘数字按不到
+            text = key.ToString();
             return true;
         }
         if (key is >= Key.A and <= Key.Z)
@@ -135,7 +136,22 @@ public sealed class HotkeyBox : Wpf.Ui.Controls.Button
             text = key.ToString();
             return true;
         }
-        text = "";
-        return false;
+        text = key switch
+        {
+            Key.Space => "Space",
+            Key.OemSemicolon => "Semicolon",
+            Key.OemPlus => "Equal",
+            Key.OemComma => "Comma",
+            Key.OemMinus => "Minus",
+            Key.OemPeriod => "Period",
+            Key.OemQuestion => "Slash",
+            Key.OemTilde => "Backquote",
+            Key.OemOpenBrackets => "LeftBracket",
+            Key.OemBackslash => "Backslash",
+            Key.OemCloseBrackets => "RightBracket",
+            Key.OemQuotes => "Quote",
+            _ => "",
+        };
+        return text.Length > 0;
     }
 }

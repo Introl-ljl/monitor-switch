@@ -352,7 +352,7 @@ public partial class TrayFlyoutWindow : FluentWindow
         catch (Exception ex)
         {
             AppPaths.Log("托盘新建模板失败: " + ex);
-            ShowError("创建模板失败：" + ex.Message);
+            ShowError(Strings.F("Msg.CreateProfileFailed", ex.Message));
         }
     }
 
@@ -381,7 +381,9 @@ public partial class TrayFlyoutWindow : FluentWindow
             if (!result.Success)
             {
                 AppPaths.Log("托盘投影切换失败: " + result.ErrorMessage);
-                ShowError(Strings.F("Apply.TopologyFailed", result.ErrorMessage));
+                // ErrorMessage 已是完整文案（Apply.TopologyFailed），再包一层会变成
+                // “切换失败：切换失败：…”
+                ShowError(result.ErrorMessage ?? Strings.T("Common.UnknownError"));
                 return;
             }
             HideWithFade();
@@ -389,7 +391,7 @@ public partial class TrayFlyoutWindow : FluentWindow
         catch (Exception ex)
         {
             AppPaths.Log("托盘投影切换异常: " + ex);
-            ShowError(Strings.F("Apply.TopologyFailed", ex.Message));
+            ShowError(ex.Message);
         }
         finally
         {

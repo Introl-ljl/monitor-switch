@@ -71,10 +71,28 @@ public sealed class DisplayArrangeCanvas : FrameworkElement
     {
         Cursor = Cursors.SizeAll;
         ClipToBounds = true;
-        Focusable = false;
+        // 可聚焦：方向键微调选中显示器的位置（键盘可达性；鼠标拖拽见 OnMouseLeftButtonDown）
+        Focusable = true;
         Loaded += (_, _) => ThemeService.ThemeChanged += OnThemeChanged;
         Unloaded += (_, _) => ThemeService.ThemeChanged -= OnThemeChanged;
         SizeChanged += (_, _) => InvalidateVisual();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        var item = Items?.FirstOrDefault(i => i.IsSelected);
+        if (item is null) { base.OnKeyDown(e); return; }
+
+        int step = (Keyboard.Modifiers & ModifierKeys.Shift) != 0 ? 10 : 1;
+        int dx = e.Key switch { Key.Left => -step, Key.Right => step, _ => 0 };
+        int dy = e.Key switch { Key.Up => -step, Key.Down => step, _ => 0 };
+        if (dx == 0 && dy == 0) { base.OnKeyDown(e); return; }
+
+        item.X += dx;
+        item.Y += dy;
+        // 与拖拽结束同一条提交路径：写入草稿并刷新主屏标记
+        PositionCommitted?.Invoke(item);
+        e.Handled = true;
     }
 
     private void OnThemeChanged() => InvalidateVisual();
