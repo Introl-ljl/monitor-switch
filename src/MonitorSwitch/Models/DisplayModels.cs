@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using MonitorSwitch.I18n;
 using MonitorSwitch.Interop;
@@ -28,7 +30,10 @@ public sealed class MonitorSnapshot
     public uint SourceWidth { get; set; }
     public uint SourceHeight { get; set; }
 
-    /// <summary>面板原生分辨率（目标模式 activeSize），同样为面板朝向。</summary>
+    /// <summary>
+    /// 应用时写入目标模式 activeSize 的分辨率（面板朝向）。
+    /// 通常等于面板原生分辨率；用户通过草稿/CLI 改分辨率后即为请求分辨率。
+    /// </summary>
     public uint PanelWidth { get; set; }
     public uint PanelHeight { get; set; }
 
@@ -47,6 +52,15 @@ public sealed class MonitorSnapshot
     public uint HSyncDenominator { get; set; } = 1;
     public uint VSyncNumerator { get; set; }
     public uint VSyncDenominator { get; set; } = 1;
+    /// <summary>扫描线序（1=逐行）。捕获自隔行时序的模板应用时需原样回写。</summary>
+    public uint ScanLineOrdering { get; set; } = 1;
+
+    /// <summary>
+    /// 兜底保存文件中本程序不认识的字段：序列化时原样写回，避免升级/降级时
+    /// 新增字段被一次普通保存静默剥离（配合 SchemaVersion 使用）。
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 
     public MonitorSnapshot Clone() => (MonitorSnapshot)MemberwiseClone();
 
@@ -68,7 +82,11 @@ public sealed class MonitorSnapshot
 /// <summary>一份可一键恢复的显示器配置模板。</summary>
 public sealed class DisplayProfile
 {
+    /// <summary>当前 profiles.json 的结构版本。升级结构时递增并在加载处做迁移。</summary>
+    public const int CurrentSchemaVersion = 1;
+
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public string Name { get; set; } = "";
     public DateTime CreatedAt { get; set; } = DateTime.Now;
     public DateTime ModifiedAt { get; set; } = DateTime.Now;
@@ -76,14 +94,20 @@ public sealed class DisplayProfile
     public string? Hotkey { get; set; }
     public List<MonitorSnapshot> Monitors { get; set; } = new();
 
+    /// <summary>兜底保存文件中本程序不认识的字段，序列化时原样写回（防止降级丢数据）。</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
+
     public DisplayProfile Clone() => new()
     {
         Id = Id,
+        SchemaVersion = SchemaVersion,
         Name = Name,
         CreatedAt = CreatedAt,
         ModifiedAt = ModifiedAt,
         Hotkey = Hotkey,
         Monitors = Monitors.Select(m => m.Clone()).ToList(),
+        ExtensionData = ExtensionData is null ? null : new Dictionary<string, JsonElement>(ExtensionData),
     };
 
     [JsonIgnore]
@@ -101,8 +125,14 @@ public sealed class DisplayProfile
         }
     }
 
-    public static string FormatHz(double hz) =>
-        Math.Abs(hz - Math.Round(hz)) < 0.01 ? $"{Math.Round(hz):0} Hz" : $"{hz:0.##} Hz";
+    public static string FormatHz(double hz)
+    {
+        // InvariantCulture：保证 CLI 的机器可读输出在逗号小数区域（如 de-DE）下
+        // 仍可被 ParseRefresh 无损回读，界面与脚本看到同一格式。
+        return Math.Abs(hz - Math.Round(hz)) < 0.01
+            ? Math.Round(hz).ToString("0", CultureInfo.InvariantCulture) + " Hz"
+            : hz.ToString("0.##", CultureInfo.InvariantCulture) + " Hz";
+    }
 }
 
 public enum QuickTopology
@@ -150,6 +180,7 @@ public sealed class LiveDisplay
     public uint RefreshDen { get; set; } = 1;
     public uint Rotation { get; set; } = 1;
     public uint Scaling { get; set; }
+    public uint ScanLineOrdering { get; set; } = 1;
     public double ScalePercent { get; set; } = 100;
     public bool HdrSupported { get; set; }
     public bool HdrEnabled { get; set; }
@@ -171,24 +202,35 @@ public sealed class LiveDisplay
         ? Strings.F("Display.NameFormat", Number)
         : MonitorName;
 
-    public string ConnectorName => Connector switch
+    /// <summary>
+    /// 连接器类型 → 文案键。与 wingdi.h 的 DISPLAYCONFIG_VIDEO_OUTPUT_TECHNOLOGY 对齐：
+    /// OTHER=-1（uint 形式为 0xFFFFFFFF）、HD15=1、SVIDEO=2、COMPOSITE=3、COMPONENT=4、
+    /// DVI=5、HDMI=6、LVDS=7、D_JPN=8、SDI=9、DISPLAYPORT_EXT=10、DISPLAYPORT_EMB=11、
+    /// UDI_EXT=12、UDI_EMB=13、SDTVDONGLE=14、MIRACAST=15、INDIRECT_WIRED=16、
+    /// INDIRECT_VIRTUAL=17、DISPLAYPORT_USB_TUNNELLED=18。
+    /// internal 供测试工程断言映射。
+    /// </summary>
+    internal static string ConnectorResourceKey(uint tech) => tech switch
     {
-        0 => Strings.T("Display.Connector.Vga"),
-        4 => Strings.T("Display.Connector.Dvi"),
-        5 => Strings.T("Display.Connector.Hdmi"),
-        6 => Strings.T("Display.Connector.Lvds"),
-        10 or 11 => Strings.T("Display.Connector.DisplayPort"),
-        12 or 13 => Strings.T("Display.Connector.Udi"),
-        14 => Strings.T("Display.Connector.Sdtv"),
-        15 => Strings.T("Display.Connector.Miracast"),
-        1 => Strings.T("Display.Connector.SVideo"),
-        2 => Strings.T("Display.Connector.Composite"),
-        3 => Strings.T("Display.Connector.Component"),
-        8 => Strings.T("Display.Connector.DJpn"),
-        9 => Strings.T("Display.Connector.Sdi"),
-        16 => Strings.T("Display.Connector.Internal"),
-        _ => Strings.T("Display.Connector.Other"),
+        1 => "Display.Connector.Vga",
+        2 => "Display.Connector.SVideo",
+        3 => "Display.Connector.Composite",
+        4 => "Display.Connector.Component",
+        5 => "Display.Connector.Dvi",
+        6 => "Display.Connector.Hdmi",
+        7 => "Display.Connector.Lvds",
+        8 => "Display.Connector.DJpn",
+        9 => "Display.Connector.Sdi",
+        10 or 11 => "Display.Connector.DisplayPort",
+        12 or 13 => "Display.Connector.Udi",
+        14 => "Display.Connector.Sdtv",
+        15 => "Display.Connector.Miracast",
+        16 or 17 => "Display.Connector.Virtual",
+        18 => "Display.Connector.DisplayPort",
+        _ => "Display.Connector.Other", // 含 OTHER(-1)、0 及未来新增值
     };
+
+    public string ConnectorName => Strings.T(ConnectorResourceKey(Connector));
 
     public string ResolutionText => $"{W} × {H}";
 
@@ -211,6 +253,7 @@ public sealed class LiveDisplay
         RefreshHz = RefreshHz,
         Rotation = Rotation,
         Scaling = Scaling,
+        ScanLineOrdering = ScanLineOrdering,
         Hdr = HdrEnabled,
         PixelRate = PixelRate,
         HSyncNumerator = HSyncNum,

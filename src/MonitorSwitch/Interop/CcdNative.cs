@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using MonitorSwitch.I18n;
+using MonitorSwitch.Services;
 
 namespace MonitorSwitch.Interop;
 
@@ -7,7 +8,7 @@ namespace MonitorSwitch.Interop;
 /// Windows CCD API (Client Configuration Display) P/Invoke。
 /// 路径/模式数组一律使用原始字节缓冲区 + 运行时步长检测：
 /// 不同 Windows 版本的 DISPLAYCONFIG_MODE_INFO 尺寸不同
-/// （文档为 48 字节，Windows 11 26200 实测为 56 字节——TARGET_MODE 末尾多 8 字节），
+/// （文档为 48 字节，Windows 11 26200 实测为 64 字节——本机日志可证），
 /// 且 pixelRate 为 UINT64 而非 RATIONAL。
 /// </summary>
 public static class CcdNative
@@ -102,12 +103,24 @@ public static class CcdNative
     [StructLayout(LayoutKind.Sequential)]
     public struct DISPLAYCONFIG_TARGET_MODE
     {
-        public ulong PixelRate; // 实测为 UINT64（如 4K144 ≈ 1.19GHz）
+        // 实测布局（与本机 profiles.json 数据吻合）：
+        // pixelRate@0 为像素时钟（如 1080p60 = 148500000），hSyncFreq 以有理数
+        // {pixelRate, 总扫描宽度} 表示行频，vSyncFreq 以 {Hz, 1000} 表示帧频。
+        // 完整 48 字节 = VIDEO_SIGNAL_INFO 全部字段；GET 类 API 对 Size 要求精确，
+        // 少一字节都会返回 ERROR_INVALID_PARAMETER，因此不能省略末尾字段。
+        public ulong PixelRate;
         public DISPLAYCONFIG_RATIONAL HSyncFreq;
         public DISPLAYCONFIG_RATIONAL VSyncFreq;
         public DISPLAYCONFIG_2DREGION ActiveSize;
+        public DISPLAYCONFIG_2DREGION TotalSize;
+        public uint SignalInfoStd;
+        public uint ScanLineOrdering;
     }
 
+    /// <summary>
+    /// 实测 80 字节（20 头 + 8 宽高 + 4 对齐填充 + 48 字节 TargetMode）。
+    /// GET 类 API 要求 Size 精确匹配：给大给小都会返回 0x57，不要试图“留裕量”。
+    /// </summary>
     [StructLayout(LayoutKind.Sequential)]
     public struct DISPLAYCONFIG_TARGET_PREFERRED_MODE
     {
@@ -115,8 +128,6 @@ public static class CcdNative
         public uint Width;
         public uint Height;
         public DISPLAYCONFIG_TARGET_MODE TargetMode;
-        public ulong Reserved0; // GET 类 API 允许 "至少" 大小，为未来扩展留裕量
-        public ulong Reserved1;
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -267,7 +278,9 @@ public static class CcdNative
     }
 
     private static readonly int[] PathStrideCandidates = { 72, 76, 80, 88 };
-    private static readonly int[] ModeStrideCandidates = { 48, 56, 52, 64 };
+    // Win11 26200 实测 64（16 头 + 48 字节 TARGET/SOURCE union），置于首位；
+    // 旧系统更小，检测启发式会逐一验证并否决不匹配的候选。
+    private static readonly int[] ModeStrideCandidates = { 64, 56, 52, 48 };
 
     public static QueryResult Query(uint flags)
     {
@@ -306,6 +319,7 @@ public static class CcdNative
             if ((count + 1) * s > buf.Length) continue;
             if (ValidatePaths(buf, s, count, modeCount)) return s;
         }
+        AppPaths.Log("路径步长检测失败，回退默认 72");
         return 72;
     }
 
@@ -333,6 +347,7 @@ public static class CcdNative
             if ((count + 1) * s > buf.Length) continue;
             if (ValidateModes(buf, s, count, paths, pathStride, pathCount)) return s;
         }
+        AppPaths.Log("模式步长检测失败，回退默认 48");
         return 48;
     }
 
@@ -374,6 +389,7 @@ public static class CcdNative
     public static uint PathOutputTechnology(byte[] b, int stride, int i) => ReadUInt32(b, i * stride + P_OUTTECH);
     public static uint PathRotation(byte[] b, int stride, int i) => ReadUInt32(b, i * stride + P_ROTATION);
     public static uint PathScaling(byte[] b, int stride, int i) => ReadUInt32(b, i * stride + P_SCALING);
+    public static uint PathScanLineOrdering(byte[] b, int stride, int i) => ReadUInt32(b, i * stride + P_SCANLINE);
     public static uint PathFlags(byte[] b, int stride, int i) => ReadUInt32(b, i * stride + P_FLAGS);
     public static int PathTargetAvailable(byte[] b, int stride, int i) => ReadInt32(b, i * stride + P_TGTAVAIL);
     public static (uint Num, uint Den) PathRefreshRate(byte[] b, int stride, int i) =>
@@ -391,13 +407,15 @@ public static class CcdNative
     public static void PathSetSourceModeIdx(byte[] b, int off, uint idx) => WriteUInt32(b, off + P_SRC_MODEIDX, idx);
     public static void PathSetTargetModeIdx(byte[] b, int off, uint idx) => WriteUInt32(b, off + P_TGT_MODEIDX, idx);
 
-    public static void PathSetTargetInfo(byte[] b, int off, uint rotation, uint scaling, uint refNum, uint refDen)
+    public static void PathSetTargetInfo(byte[] b, int off, uint rotation, uint scaling, uint refNum, uint refDen,
+        uint scanLineOrdering)
     {
         WriteUInt32(b, off + P_ROTATION, rotation);
         WriteUInt32(b, off + P_SCALING, scaling);
         WriteUInt32(b, off + P_REFNUM, refNum);
         WriteUInt32(b, off + P_REFDEN, refDen);
-        WriteUInt32(b, off + P_SCANLINE, SCANLINE_ORDERING_PROGRESSIVE);
+        // 捕获自隔行时序的模板若被强制改写为逐行，应用会被驱动拒绝
+        WriteUInt32(b, off + P_SCANLINE, scanLineOrdering == 0 ? SCANLINE_ORDERING_PROGRESSIVE : scanLineOrdering);
     }
 
     // ---------- 模式字段访问 ----------

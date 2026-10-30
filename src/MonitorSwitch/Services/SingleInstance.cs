@@ -9,6 +9,7 @@ public sealed class SingleInstance : IDisposable
 
     private Mutex? _mutex;
     private EventWaitHandle? _activate;
+    private System.Threading.RegisteredWaitHandle? _wait;
 
     public event Action? ActivateRequested;
 
@@ -27,7 +28,7 @@ public sealed class SingleInstance : IDisposable
         }
 
         _activate = new EventWaitHandle(false, EventResetMode.AutoReset, ActivateEventName);
-        _ = ThreadPool.RegisterWaitForSingleObject(
+        _wait = ThreadPool.RegisterWaitForSingleObject(
             _activate,
             (_, _) => ActivateRequested?.Invoke(),
             null,
@@ -38,6 +39,10 @@ public sealed class SingleInstance : IDisposable
 
     public void Dispose()
     {
+        // 必须先注销等待：直接关闭事件句柄而 wait 还在册属于未定义行为，
+        // 退出竞态下回调可能再触发一次 ActivateRequested → 已关闭的 Dispatcher
+        _wait?.Unregister(null);
+        _wait = null;
         try { _mutex?.ReleaseMutex(); } catch { }
         _mutex?.Dispose();
         _activate?.Dispose();

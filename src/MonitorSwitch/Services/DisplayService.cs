@@ -12,6 +12,12 @@ public sealed class DisplayService
 {
     public static DisplayService Instance { get; } = new();
 
+    /// <summary>
+    /// 串行化所有“下发配置”的调用。热键、托盘、CLI 中继、自动还原都可能并发进入
+    /// apply 阶梯，交错执行会得到混合配置与互相矛盾的错误信息。
+    /// </summary>
+    private readonly SemaphoreSlim _applyLock = new(1, 1);
+
     /// <summary>显示器拓扑变化（WM_DISPLAYCHANGE 或本工具应用配置后触发，已调度到 UI 线程）。</summary>
     public event Action? DisplaysChanged;
 
@@ -28,7 +34,7 @@ public sealed class DisplayService
     {
         var q = CcdNative.Query(CcdNative.QDC_ONLY_ACTIVE_PATHS);
 
-        var monitorMap = new Dictionary<string, (GdiNative.RECT Rect, uint Dpi)>(StringComparer.OrdinalIgnoreCase);
+        var monitorMap = new Dictionary<string, (GdiNative.RECT Rect, uint Dpi, bool Primary)>(StringComparer.OrdinalIgnoreCase);
         GdiNative.MonitorEnumProc monitorCallback = (IntPtr hMonitor, IntPtr hdc, ref GdiNative.RECT rc, IntPtr data) =>
         {
             var mi = new GdiNative.MONITORINFOEXW();
@@ -37,7 +43,7 @@ public sealed class DisplayService
             {
                 uint dpi = 96;
                 try { GdiNative.GetDpiForMonitor(hMonitor, 0, out dpi, out _); } catch { }
-                monitorMap[mi.SzDevice] = (mi.RcMonitor, dpi);
+                monitorMap[mi.SzDevice] = (mi.RcMonitor, dpi, (mi.DwFlags & 1) != 0);
             }
             return true;
         };
@@ -64,6 +70,7 @@ public sealed class DisplayService
                 Connector = tech,
                 Rotation = CcdNative.PathRotation(q.PathBuffer, q.PathStride, i),
                 Scaling = CcdNative.PathScaling(q.PathBuffer, q.PathStride, i),
+                ScanLineOrdering = CcdNative.PathScanLineOrdering(q.PathBuffer, q.PathStride, i),
             };
             d.Number = ParseDisplayNumber(srcName);
 
@@ -108,13 +115,21 @@ public sealed class DisplayService
                 d.RefreshHz = (double)d.VSyncNum / d.VSyncDen;
             }
 
-            if (!string.IsNullOrEmpty(srcName) && monitorMap.TryGetValue(srcName, out var mm))
+            if (monitorMap.TryGetValue(srcName, out var mm))
             {
                 d.MonitorRect = mm.Rect;
+                // 每显示器缩放：优先用 Shcore 返回的真实 DPI（PMv2 下即当前缩放），
+                // 取不到有效值时 GdiNative 内部再退回注册表（详见该方法的说明）。
+                d.ScalePercent = GdiNative.GetMonitorScalePercent(srcName, mm.Dpi);
+                // 主显示器优先信 GDI 的 MONITORINFOF_PRIMARY 标志（克隆/同坐标拓扑下
+                // “原点在 (0,0)”的启发式会把多块屏都判成主屏），取不到再退回坐标判断
+                d.IsPrimary = mm.Primary;
             }
-            // 每显示器缩放：Shcore.GetDpiForMonitor 在本机返回恒为 96，改用注册表 PerMonitorSettings
-            d.ScalePercent = GdiNative.GetMonitorScalePercent("", srcName);
-            d.IsPrimary = d.X == 0 && d.Y == 0;
+            else
+            {
+                d.ScalePercent = GdiNative.GetMonitorScalePercent(srcName, 0);
+                d.IsPrimary = d.X == 0 && d.Y == 0;
+            }
 
             var (hdrSup, hdrEn) = CcdNative.GetAdvancedColor(tgtAdapter, tgtId);
             d.HdrSupported = hdrSup;
@@ -306,7 +321,8 @@ public sealed class DisplayService
 
     public bool MatchesCurrent(DisplayProfile profile, List<LiveDisplay> cur)
     {
-        var active = profile.Monitors.Where(m => m.Active).ToList();
+        // m is { Active: true }：容忍文件里混入的 null 元素（视作未启用）
+        var active = profile.Monitors.Where(m => m is { Active: true }).ToList();
         if (active.Count != cur.Count) return false;
 
         var map = new Dictionary<string, LiveDisplay>(StringComparer.OrdinalIgnoreCase);
@@ -322,6 +338,8 @@ public sealed class DisplayService
             if (d.W != mon.DesktopWidth || d.H != mon.DesktopHeight) return false;
             if (Math.Abs(d.RefreshHz - mon.RefreshHz) > 0.5) return false;
             if (d.Rotation != mon.Rotation) return false;
+            // Scaling=0 是旧版本模板的未设置值，跳过比较避免误报“非当前”
+            if (mon.Scaling != 0 && d.Scaling != mon.Scaling) return false;
             if (d.HdrEnabled != mon.Hdr) return false;
         }
         return true;
@@ -373,6 +391,7 @@ public sealed class DisplayService
 
     public ApplyResult ApplyProfile(DisplayProfile profile)
     {
+        _applyLock.Wait();
         try
         {
             return ApplyProfileCore(profile);
@@ -381,6 +400,10 @@ public sealed class DisplayService
         {
             AppPaths.Log("ApplyProfile 异常: " + ex);
             return ApplyResult.Fail(Strings.F("Apply.InternalError", ex.Message));
+        }
+        finally
+        {
+            _applyLock.Release();
         }
     }
 
@@ -469,12 +492,13 @@ public sealed class DisplayService
                     CcdNative.SDC_TOPOLOGY_SUPPLIED | CcdNative.SDC_VALIDATE);
                 if (hr == CcdNative.ERROR_SUCCESS)
                 {
-                    hr = CcdNative.SetDisplayConfig((uint)chosen.Count, pathBuf, 0, null,
-                        CcdNative.SDC_TOPOLOGY_SUPPLIED | CcdNative.SDC_APPLY | CcdNative.SDC_ALLOW_PATH_ORDER_CHANGES);
+                hr = CcdNative.SetDisplayConfig((uint)chosen.Count, pathBuf, 0, null,
+                    CcdNative.SDC_TOPOLOGY_SUPPLIED | CcdNative.SDC_APPLY | CcdNative.SDC_ALLOW_PATH_ORDER_CHANGES);
                     if (hr == CcdNative.ERROR_SUCCESS)
                         return FinishApply(active);
                 }
-                errors.Add("仅拓扑：" + CcdNative.DescribeError(hr));
+                // 错误信息会原样进入 ApplyResult 并展示给用户，用中性标识而非中文前缀
+                errors.Add($"topology-only: {CcdNative.DescribeError(hr)}");
                 continue;
             }
 
@@ -502,7 +526,7 @@ public sealed class DisplayService
                     applied = true;
                     break;
                 }
-                errors.Add("应用阶段[" + variant.ToString("X") + "]：" + CcdNative.DescribeError(hr));
+                errors.Add($"apply[flags=0x{variant:X},degrade={attempt.Degrade}]: " + CcdNative.DescribeError(hr));
             }
             if (applied)
                 return FinishApply(active);
@@ -614,14 +638,15 @@ public sealed class DisplayService
                 var curRot = CcdNative.PathRotation(q.PathBuffer, pStride, pIdx);
                 var curScale = CcdNative.PathScaling(q.PathBuffer, pStride, pIdx);
                 var (rn, rd) = CcdNative.PathRefreshRate(q.PathBuffer, pStride, pIdx);
-                CcdNative.PathSetTargetInfo(pathBuf, outPe, curRot, curScale, rn, Math.Max(1u, rd));
+                var curScan = CcdNative.PathScanLineOrdering(q.PathBuffer, pStride, pIdx);
+                CcdNative.PathSetTargetInfo(pathBuf, outPe, curRot, curScale, rn, Math.Max(1u, rd), curScan);
             }
             else
             {
                 var (rn, rd) = NormalizeRefresh(mon);
                 CcdNative.PathSetTargetInfo(pathBuf, outPe, mon.Rotation,
                     (degrade & DegradeScaling) != 0 ? CcdNative.SCALING_PREFERRED : Math.Max(1u, mon.Scaling),
-                    rn, rd);
+                    rn, rd, mon.ScanLineOrdering);
             }
         }
 
@@ -650,10 +675,18 @@ public sealed class DisplayService
         return true;
     }
 
-    /// <summary>把模板里的刷新率规范化成 CCD 期望的有理数（避免 0/0）。</summary>
-    private static (uint Num, uint Den) NormalizeRefresh(MonitorSnapshot mon)
+    /// <summary>
+    /// 把模板里的刷新率规范化成 CCD 期望的有理数（避免 0/0）。
+    ///
+    /// RefreshNumerator/Denominator 与 RefreshHz 是同一信息的两种表示，正常快照
+    /// 两者一致。手写或外部工具生成的文件可能只填 RefreshHz 而 Num/Den 留默认
+    /// 60/1 —— 此时以 Hz 为准，否则 "refreshHz":144 会被静默按 60Hz 应用。
+    /// </summary>
+    internal static (uint Num, uint Den) NormalizeRefresh(MonitorSnapshot mon)
     {
-        if (mon.RefreshNumerator > 0 && mon.RefreshDenominator > 0)
+        bool looksDefault = mon.RefreshNumerator == 60 && mon.RefreshDenominator == 1;
+        if (mon.RefreshNumerator > 0 && mon.RefreshDenominator > 0
+            && !(looksDefault && mon.RefreshHz > 0 && Math.Abs(mon.RefreshHz - 60) > 0.5))
             return (mon.RefreshNumerator, mon.RefreshDenominator);
         if (mon.RefreshHz > 0)
         {
@@ -697,8 +730,20 @@ public sealed class DisplayService
                     if (mon.Hdr) warnings.Add(Strings.F("Apply.HdrUnsupported", mon.MonitorName));
                     continue;
                 }
-                if (en != mon.Hdr && !CcdNative.SetAdvancedColor(ti.Adapter, ti.Id, mon.Hdr))
-                    warnings.Add(Strings.F("Apply.HdrFailed", mon.MonitorName));
+                if (en != mon.Hdr)
+                {
+                    if (!CcdNative.SetAdvancedColor(ti.Adapter, ti.Id, mon.Hdr))
+                    {
+                        warnings.Add(Strings.F("Apply.HdrFailed", mon.MonitorName));
+                        continue;
+                    }
+                    // SET 成功不等于已生效：驱动在模式刚切换的瞬间可能拒绝或延迟应用，
+                    // 稍候回读一次实际状态，不符则明确告警而不是静默
+                    Thread.Sleep(150);
+                    var (_, now) = CcdNative.GetAdvancedColor(ti.Adapter, ti.Id);
+                    if (now != mon.Hdr)
+                        warnings.Add(Strings.F("Apply.HdrFailed", mon.MonitorName));
+                }
             }
         }
         catch (Exception ex)
@@ -712,19 +757,27 @@ public sealed class DisplayService
 
     public ApplyResult ApplyTopology(QuickTopology topology)
     {
-        var sdc = topology switch
+        _applyLock.Wait();
+        try
         {
-            QuickTopology.InternalOnly => CcdNative.SDC_TOPOLOGY_INTERNAL,
-            QuickTopology.Clone => CcdNative.SDC_TOPOLOGY_CLONE,
-            QuickTopology.Extend => CcdNative.SDC_TOPOLOGY_EXTEND,
-            QuickTopology.ExternalOnly => CcdNative.SDC_TOPOLOGY_EXTERNAL,
-            _ => CcdNative.SDC_TOPOLOGY_EXTEND,
-        };
-        var hr = CcdNative.SetDisplayConfig(0, null, 0, null, sdc | CcdNative.SDC_APPLY);
-        if (hr != CcdNative.ERROR_SUCCESS)
-            return ApplyResult.Fail(Strings.F("Apply.TopologyFailed", CcdNative.DescribeError(hr)));
-        RaiseDisplaysChanged();
-        return ApplyResult.Ok();
+            var sdc = topology switch
+            {
+                QuickTopology.InternalOnly => CcdNative.SDC_TOPOLOGY_INTERNAL,
+                QuickTopology.Clone => CcdNative.SDC_TOPOLOGY_CLONE,
+                QuickTopology.Extend => CcdNative.SDC_TOPOLOGY_EXTEND,
+                QuickTopology.ExternalOnly => CcdNative.SDC_TOPOLOGY_EXTERNAL,
+                _ => CcdNative.SDC_TOPOLOGY_EXTEND,
+            };
+            var hr = CcdNative.SetDisplayConfig(0, null, 0, null, sdc | CcdNative.SDC_APPLY);
+            if (hr != CcdNative.ERROR_SUCCESS)
+                return ApplyResult.Fail(Strings.F("Apply.TopologyFailed", CcdNative.DescribeError(hr)));
+            RaiseDisplaysChanged();
+            return ApplyResult.Ok();
+        }
+        finally
+        {
+            _applyLock.Release();
+        }
     }
 
     // ---------------------------------------------------------------- 工具

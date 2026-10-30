@@ -24,22 +24,24 @@ public sealed class ApplyGuard
 
     public async Task<ApplyResult> ApplyAsync(DisplayProfile profile)
     {
-        var before = CaptureSafe();
+        // 捕获与“是否真的变了”的判断都是完整的 CCD 枚举（多屏慢驱动下上百毫秒），
+        // 放到线程池，避免热键/托盘路径在 UI 线程上卡顿；ShowRevert 自行归队 UI 线程。
+        var before = await Task.Run(CaptureSafe);
         var result = await Task.Run(() => DisplayService.Instance.ApplyProfile(profile));
         if (!result.Success) return result;
 
-        MaybeShowRevert(before);
+        await MaybeShowRevertAsync(before);
         return result;
     }
 
     /// <summary>切换投影模式（带还原保护）。</summary>
     public async Task<ApplyResult> ApplyTopologyAsync(QuickTopology topology)
     {
-        var before = CaptureSafe();
+        var before = await Task.Run(CaptureSafe);
         var result = await Task.Run(() => DisplayService.Instance.ApplyTopology(topology));
         if (!result.Success) return result;
 
-        MaybeShowRevert(before);
+        await MaybeShowRevertAsync(before);
         return result;
     }
 
@@ -53,19 +55,18 @@ public sealed class ApplyGuard
         }
     }
 
-    private void MaybeShowRevert(DisplayProfile before)
+    private async Task MaybeShowRevertAsync(DisplayProfile before)
     {
         if (!SettingsService.Instance.Current.RevertGuardEnabled) return;
         if (before.Monitors.Count == 0) return;
 
         // 配置没有实际变化时不需要打扰用户
         bool changed;
-        try { changed = !DisplayService.Instance.MatchesCurrent(before); }
+        try { changed = !await Task.Run(() => DisplayService.Instance.MatchesCurrent(before)); }
         catch { changed = true; }
         if (!changed) return;
 
-        _previous = before;
-        ShowRevert();
+        ShowRevert(before);
     }
 
     public void KeepChanges()
@@ -109,16 +110,21 @@ public sealed class ApplyGuard
         try { w?.Close(); } catch { }
     }
 
-    private void ShowRevert()
+    private void ShowRevert(DisplayProfile before)
     {
-        CloseWindow();
-
-        // 上一次的确认条若还开着，先让出位置，避免叠加
+        // 关旧窗、记 _previous、建新窗必须在同一次 UI 线程调度内原子完成：
+        // 并发 apply（CLI 中继 + 托盘）若交错，先建的窗口会成为孤儿，
+        // 其倒计时到点会用“最后一份” _previous 触发错误的还原。
         var app = System.Windows.Application.Current;
         if (app is null) return;
 
         app.Dispatcher.Invoke(() =>
         {
+            if (App.IsExiting) return;
+
+            CloseWindow();
+            _previous = before;
+
             // 还原确认条是 WPF 窗口，需要 WPF-UI 资源；托盘常驻期间这些资源是延迟加载的
             ThemeService.EnsureUiResources();
             ThemeService.Apply(SettingsService.Instance.Current.Theme);

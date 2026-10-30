@@ -20,6 +20,7 @@ public static class ShellNative
     public const uint NIF_MESSAGE = 0x00000001;
     public const uint NIF_ICON = 0x00000002;
     public const uint NIF_TIP = 0x00000004;
+    public const uint NIF_INFO = 0x00000010;
 
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;
@@ -94,4 +95,15 @@ public static class ShellNative
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
     public static extern IntPtr GetModuleHandleW(string? lpModuleName);
+
+    // ----- 消息 / 系统度量 -----
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern uint RegisterWindowMessageW(string lpString);
+
+    public const int SM_CXSMICON = 49;
+    public const int SM_CYSMICON = 50;
+
+    [DllImport("user32.dll")]
+    public static extern int GetSystemMetrics(int nIndex);
 }

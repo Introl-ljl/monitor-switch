@@ -1,7 +1,15 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace MonitorSwitch.Models;
 
 public sealed class AppSettings
 {
+    /// <summary>当前 settings.json 的结构版本，与 DisplayProfile.CurrentSchemaVersion 各自独立递增。</summary>
+    public const int CurrentSchemaVersion = 1;
+
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
+
     /// <summary>Auto / Light / Dark</summary>
     public string Theme { get; set; } = "Auto";
 
@@ -20,4 +28,8 @@ public sealed class AppSettings
     /// </summary>
     public double? FlyoutLeft { get; set; }
     public double? FlyoutTop { get; set; }
+
+    /// <summary>兜底保存文件中本程序不认识的字段，序列化时原样写回（防止降级丢数据）。</summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }

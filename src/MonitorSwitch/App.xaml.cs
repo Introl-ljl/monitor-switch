@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using MonitorSwitch.Cli;
 using MonitorSwitch.I18n;
@@ -13,6 +14,15 @@ public partial class App : Application
 {
     private static bool _exiting;
     public static bool IsExiting => _exiting;
+
+    /// <summary>ReleaseMainWindow 正在销毁窗口：放行 MainWindow.OnClosing 的 Close。</summary>
+    public static bool ReleasingWindow { get; private set; }
+
+    /// <summary>OnStartup 完成，之后的 UI 异常才允许被吞掉进托盘；启动期异常应快速失败。</summary>
+    private static volatile bool _startupComplete;
+
+    /// <summary>Explorer 重启广播，收到后重建托盘图标。</summary>
+    private static uint _taskbarCreatedMsg;
 
     private readonly SingleInstance _single = new();
     private readonly TrayService _tray = new();
@@ -37,6 +47,13 @@ public partial class App : Application
 
         DispatcherUnhandledException += (_, args) =>
         {
+            if (!_startupComplete)
+            {
+                // 启动期异常被吞掉会变成“无托盘无窗口的僵尸进程”，快速失败更好排查
+                AppPaths.Log("启动期未处理异常: " + args.Exception);
+                args.Handled = false;
+                return;
+            }
             AppPaths.Log("UI 线程未处理异常: " + args.Exception);
             args.Handled = true;
         };
@@ -80,12 +97,17 @@ public partial class App : Application
         I18n.Localization.Instance.Apply(SettingsService.Instance.Current.Language);
         ThemeService.Apply(SettingsService.Instance.Current.Theme);
 
+        // exe 被移动/升级后 Run 键还指向旧路径：启动时校正，保留用户原本的启用状态
+        AutoStartService.SyncWithCurrentPath();
+
         _messages = new MessageHwnd();
         _messages.MessageReceived += OnMessage;
 
         _hotkeys = new HotkeyService();
         _hotkeys.Attach(_messages.Handle);
         _hotkeys.HotkeyPressed += OnHotkeyPressed;
+        _hotkeys.RegistrationFailures += n =>
+            _tray.ShowBalloon(Strings.T("Tray.HotkeyFailedTitle"), Strings.F("Tray.HotkeyFailedMsg", n));
         _hotkeys.Refresh(ProfileStore.Instance.Profiles);
         ProfileStore.Instance.Changed += () => _hotkeys?.Refresh(ProfileStore.Instance.Profiles);
         SettingsService.Instance.SettingsChanged += OnSettingsChanged;
@@ -94,6 +116,9 @@ public partial class App : Application
         _tray.Init(_messages.Handle, _trayIconHandle, Strings.T("App.Title"));
         _tray.LeftClick += ToggleFlyout;
         _tray.RightClick += ShowTrayMenu;
+
+        // Explorer 重启会广播 TaskbarCreated 清掉所有托盘图标，收到后重建
+        _taskbarCreatedMsg = ShellNative.RegisterWindowMessageW("TaskbarCreated");
 
         // CLI 管道服务：MonitorSwitch.exe <命令> 优先经它中继到本进程执行，
         // 以复用模板存储、全局快捷键与还原保护；应用未运行时 CLI 会直连执行。
@@ -109,6 +134,9 @@ public partial class App : Application
         // 测试辅助：--show-flyout 启动时直接打开托盘面板
         if (e.Args.Any(a => a.Equals("--show-flyout", StringComparison.OrdinalIgnoreCase)))
             Dispatcher.InvokeAsync(ToggleFlyout);
+
+        // 从这里起，运行期 UI 异常可以安全地被吞进托盘（见 DispatcherUnhandledException）
+        _startupComplete = true;
     }
 
     private void OnSettingsChanged()
@@ -141,14 +169,19 @@ public partial class App : Application
 
         const uint IMAGE_ICON = 1;
         const uint LR_LOADFROMFILE = 0x00000010;
-        const uint LR_DEFAULTSIZE = 0x00000040;
 
-        var h = ShellNative.LoadImage(IntPtr.Zero, path, IMAGE_ICON, 0, 0, LR_LOADFROMFILE | LR_DEFAULTSIZE);
+        // 托盘按 16px 显示：按小图标尺寸加载，避免 32px 图标缩放发糊
+        int cx = ShellNative.GetSystemMetrics(ShellNative.SM_CXSMICON);
+        int cy = ShellNative.GetSystemMetrics(ShellNative.SM_CYSMICON);
+        if (cx <= 0) cx = 16;
+        if (cy <= 0) cy = 16;
+
+        var h = ShellNative.LoadImage(IntPtr.Zero, path, IMAGE_ICON, cx, cy, LR_LOADFROMFILE);
         if (h != IntPtr.Zero) return h;
 
         // 退路：直接从当前进程的可执行模块里取图标
         var module = ShellNative.GetModuleHandleW(null);
-        h = ShellNative.LoadImage(module, "#32512", IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
+        h = ShellNative.LoadImage(module, "#32512", IMAGE_ICON, cx, cy, 0);
         if (h == IntPtr.Zero) AppPaths.Log("读取托盘图标失败，使用默认图标");
         return h;
     }
@@ -166,9 +199,23 @@ public partial class App : Application
             case ShellNative.WM_HOTKEY:
                 _hotkeys?.HandleWmHotkey(wParam.ToInt32());
                 break;
+            default:
+                // Explorer 重启广播：托盘图标被系统清掉了，重建
+                if (_taskbarCreatedMsg != 0 && msg == (int)_taskbarCreatedMsg)
+                    _tray.ReAdd();
+                // 系统深浅色切换：仅“跟随系统”主题时重新应用
+                else if (msg == WM_SETTINGCHANGE)
+                {
+                    var section = Marshal.PtrToStringUni(lParam);
+                    if (string.Equals(section, "ImmersiveColorSet", StringComparison.Ordinal))
+                        ThemeService.OnSystemThemeChanged();
+                }
+                break;
         }
         return IntPtr.Zero;
     }
+
+    private const int WM_SETTINGCHANGE = 0x001A;
 
     private void OnHotkeyPressed(string profileId)
     {
@@ -204,8 +251,10 @@ public partial class App : Application
         Dispatcher.InvokeAsync(() =>
         {
             if (_exiting) return;
+            if (ReleasingWindow) return; // 防重入：排队中的第二个回调会再跑一轮 GC 并可能误关新窗口
 
-            try { _mainWindow?.Close(); } catch { }
+            try { ReleasingWindow = true; _mainWindow?.Close(); }
+            finally { ReleasingWindow = false; }
             _mainWindow = null;
 
             // 托盘面板与还原确认条同样持有 WPF 窗口，一并释放

@@ -30,15 +30,22 @@ public static class AppPaths
     public static string ProfilesFile => Path.Combine(DataDir, "profiles.json");
     public static string LogFile => Path.Combine(DataDir, "log.txt");
 
+    /// <summary>UI 线程、线程池（还原/CLI 管道）会并发写日志；AppendAllText 默认共享读，
+    /// 撞车抛 IOException 被吞 → 丢日志，截断与追加也可能互相踩，统一串行化。</summary>
+    private static readonly object LogLock = new();
+
     public static void Log(string message)
     {
         try
         {
-            Directory.CreateDirectory(DataDir);
-            File.AppendAllText(LogFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  {message}{Environment.NewLine}");
-            // 日志超过 256KB 时截断
-            if (new FileInfo(LogFile).Length > 256 * 1024)
-                File.WriteAllText(LogFile, string.Empty);
+            lock (LogLock)
+            {
+                Directory.CreateDirectory(DataDir);
+                File.AppendAllText(LogFile, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}  {message}{Environment.NewLine}");
+                // 日志超过 256KB 时截断
+                if (new FileInfo(LogFile).Length > 256 * 1024)
+                    File.WriteAllText(LogFile, string.Empty);
+            }
         }
         catch { /* 日志失败不影响运行 */ }
     }

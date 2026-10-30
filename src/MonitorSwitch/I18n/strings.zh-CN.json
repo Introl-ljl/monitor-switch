@@ -196,6 +196,12 @@
   "Msg.JsonFilter": "JSON 文件|*.json",
   "Msg.ApplyFailed": "应用“{0}”失败：{1}",
   "Msg.ReadDisplaysFailed": "读取显示器信息失败：{0}",
+  "Msg.CreateProfileFailed": "创建模板失败：{0}",
+
+  "Display.Connector.Virtual": "虚拟显示器",
+
+  "Tray.HotkeyFailedTitle": "快捷键注册失败",
+  "Tray.HotkeyFailedMsg": "{0} 个快捷键未能注册，组合可能已被其它程序占用。",
 
   "Cli.On": "开",
   "Cli.Off": "关",

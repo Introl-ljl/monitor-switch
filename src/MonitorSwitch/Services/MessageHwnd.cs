@@ -3,19 +3,25 @@ using System.Runtime.InteropServices;
 namespace MonitorSwitch.Services;
 
 /// <summary>
-/// 隐藏的消息窗口（接收托盘消息 / WM_DISPLAYCHANGE / WM_HOTKEY）。
+/// 隐藏的顶层消息窗口（接收托盘消息 / WM_DISPLAYCHANGE / WM_HOTKEY / 广播消息）。
 ///
 /// 为什么不用 WPF 的 <c>HwndSource</c>：
 /// HwndSource 是 WPF 的渲染宿主，创建它就会初始化 D3D 渲染管线。实测仅创建
 /// 一个消息窗口，进程就会加载 nvgpucomp64.dll(79MB) + nvd3dumx.dll(39MB)
 /// 等显卡驱动模块，常驻内存从约 37MB 涨到约 100MB。
 /// 托盘常驻场景完全不需要任何渲染能力，因此这里改用纯 Win32 消息窗口：
-/// RegisterClassEx + CreateWindowEx(HWND_MESSAGE) + WndProc。
+/// RegisterClassEx + CreateWindowEx + WndProc。
 /// 消息由 WPF Dispatcher 的同一套 Win32 消息泵派发，无需自建循环。
+///
+/// 为什么不能用 HWND_MESSAGE（仅消息窗口）：仅消息窗口不参与窗口枚举，
+/// 系统**不向它投递广播消息** —— WM_DISPLAYCHANGE、TaskbarCreated、
+/// WM_SETTINGCHANGE 全都收不到（Win32 文档明确）。因此这里创建的是
+/// WS_POPUP 隐藏顶层窗口：从不 Show 就不会出现在任务栏/Alt-Tab/屏幕上，
+/// 但广播消息照常到达。
 /// </summary>
 public sealed class MessageHwnd : IDisposable
 {
-    private const int HWND_MESSAGE = -3;
+    private const uint WS_POPUP = 0x80000000;
 
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -85,9 +91,10 @@ public sealed class MessageHwnd : IDisposable
         if (RegisterClassExW(ref wc) == 0)
             throw new InvalidOperationException("RegisterClassEx 失败，错误码 " + Marshal.GetLastWin32Error());
 
-        // HWND_MESSAGE 父窗口 → 仅消息窗口，不参与绘制、不出现在任务栏
-        _hwnd = CreateWindowExW(0, _className, "MonitorSwitch", 0, 0, 0, 0, 0,
-            new IntPtr(HWND_MESSAGE), IntPtr.Zero, _hInstance, IntPtr.Zero);
+        // 隐藏顶层窗口（父窗口为 null）：不显示就不进任务栏，但广播消息可达。
+        // HWND_MESSAGE 的仅消息窗口收不到 WM_DISPLAYCHANGE 等广播，见类注释。
+        _hwnd = CreateWindowExW(0, _className, "MonitorSwitch", WS_POPUP, 0, 0, 0, 0,
+            IntPtr.Zero, IntPtr.Zero, _hInstance, IntPtr.Zero);
 
         if (_hwnd == IntPtr.Zero)
         {
@@ -99,11 +106,20 @@ public sealed class MessageHwnd : IDisposable
 
     private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
     {
-        var handler = MessageReceived;
-        if (handler != null)
+        // 异常屏障：这里的异常会穿透原生回调成为进程级崩溃（托盘应用直接消失），
+        // 订阅者内部的问题必须就地拦截并记录。
+        try
         {
-            var result = handler((int)msg, wParam, lParam);
-            if (result != IntPtr.Zero) return result;
+            var handler = MessageReceived;
+            if (handler != null)
+            {
+                var result = handler((int)msg, wParam, lParam);
+                if (result != IntPtr.Zero) return result;
+            }
+        }
+        catch (Exception ex)
+        {
+            AppPaths.Log($"消息窗口处理 0x{msg:X4} 时异常: " + ex);
         }
         return DefWindowProcW(hWnd, msg, wParam, lParam);
     }

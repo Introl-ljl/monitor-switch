@@ -196,6 +196,12 @@
   "Msg.JsonFilter": "JSON files|*.json",
   "Msg.ApplyFailed": "Failed to apply \"{0}\": {1}",
   "Msg.ReadDisplaysFailed": "Failed to read display information: {0}",
+  "Msg.CreateProfileFailed": "Failed to create profile: {0}",
+
+  "Display.Connector.Virtual": "Virtual display",
+
+  "Tray.HotkeyFailedTitle": "Hotkey registration failed",
+  "Tray.HotkeyFailedMsg": "{0} hotkey(s) could not be registered — the combination may be in use by another app.",
 
   "Cli.On": "on",
   "Cli.Off": "off",

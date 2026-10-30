@@ -42,7 +42,8 @@ public static class GdiNative
     /// <summary>
     /// DEVMODEW（Sequential 布局 = C 自然对齐，总大小 220 字节）。
     /// 联合体（dmPosition / dmDisplayOrientation / 打印机字段）用 4 个 uint 占位：
-    /// Union0=dmPosition.x 或 dmDisplayOrientation，Union1=dmPosition.y。
+    /// 联合体首字段是 dmPosition（x@0 y@4），dmDisplayOrientation 位于联合体偏移 8
+    /// （即 Union2），dmDisplayFixedOutput 位于偏移 12（Union3）。
     /// </summary>
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct DEVMODEW
@@ -82,7 +83,6 @@ public static class GdiNative
 
         public int PositionX => (int)DmUnion0;
         public int PositionY => (int)DmUnion1;
-        public uint DisplayOrientation => DmUnion0;
 
         public static DEVMODEW Create()
         {
@@ -156,6 +156,20 @@ public static class GdiNative
         return string.Empty;
     }
 
+    /// <summary>
+    /// 取某显示器的 EDID 派生设备 ID 片段（如 "BOE0B38"）。
+    /// 注意必须读 <c>DeviceID</c>（形如 MONITOR\BOE0B38\{...}\0003），
+    /// <c>DeviceString</c> 是友好名（如 "Generic PnP Monitor"），两者不能混用。
+    /// </summary>
+    public static string GetMonitorDeviceId(string gdiDeviceName)
+    {
+        if (string.IsNullOrEmpty(gdiDeviceName)) return string.Empty;
+        var dd = DISPLAY_DEVICEW.Create();
+        if (EnumDisplayDevicesW(gdiDeviceName, 0, ref dd, 0))
+            return ParseMonitorId(dd.DeviceID ?? string.Empty);
+        return string.Empty;
+    }
+
     [DllImport("user32.dll")]
     public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip, MonitorEnumProc lpfnEnum, IntPtr dwData);
 
@@ -179,48 +193,36 @@ public static class GdiNative
 
     /// <summary>
     /// 读取某显示器的实际缩放百分比。
-    /// Shcore.GetDpiForMonitor 在 Win10 1607+ 的每显示器 DPI 下常返回 96（进程未设为
-    /// PER_MONITOR_AWARE_V2 时尤其明显），因此以注册表 PerMonitorSettings 为准。
-    /// 值的含义：DpiValue = 0 → 100%，+1 → 125%，+2 → 150%，-1 → 75%，依此类推。
+    ///
+    /// 首选 Shcore.GetDpiForMonitor(MDT_EFFECTIVE_DPI)：PerMonitorV2 进程下它返回
+    /// 真实的当前 DPI，是唯一可靠的“绝对百分比”来源。部分环境实测恒返回 96
+    /// （原因未明，可能与驱动/会话状态有关），此时退回注册表 PerMonitorSettings：
+    /// DpiValue 是相对“推荐缩放”的档位偏移（0 = 推荐值，每档约 ±25%），而推荐值
+    /// 没有公开 API，因此注册表路径只能给出近似值（推荐 100% 的显示器准确）。
+    /// 该字段仅用于展示，不参与应用配置的任何计算。
     /// </summary>
-    public static double GetMonitorScalePercent(string monitorDeviceId, string gdiDeviceName)
+    public static double GetMonitorScalePercent(string gdiDeviceName, uint effectiveDpi)
     {
+        if (effectiveDpi > 96)
+            return Math.Round(effectiveDpi * 100.0 / 96);
+
         try
         {
             using var root = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
                 @"Control Panel\Desktop\PerMonitorSettings");
-            if (root is null) return FallbackScale(gdiDeviceName);
+            if (root is null) return 100;
 
-            // 优先用 EDID 派生的监视器 ID（如 BOE0B38），其次退到 GDI 设备名
-            var candidates = new List<string>();
-            var pnp = GetMonitorPnpName(gdiDeviceName);
-            var id = ParseMonitorId(pnp);
-            if (!string.IsNullOrEmpty(id)) candidates.Add(id);
-            if (!string.IsNullOrEmpty(monitorDeviceId)) candidates.Add(monitorDeviceId);
+            // EDID 派生 ID（如 BOE0B38）与注册表子键名（BOE0B383_14_07E6_04^…）前缀匹配
+            var id = GetMonitorDeviceId(gdiDeviceName);
+            if (string.IsNullOrEmpty(id)) return 100;
 
             foreach (var name in root.GetSubKeyNames())
             {
-                if (!candidates.Any(c => name.StartsWith(c, StringComparison.OrdinalIgnoreCase))) continue;
+                if (!name.StartsWith(id, StringComparison.OrdinalIgnoreCase)) continue;
                 using var k = root.OpenSubKey(name);
                 if (k?.GetValue("DpiValue") is not int dv) continue;
                 double pct = 100 + dv * 25;
                 if (pct is >= 50 and <= 500) return pct;
-            }
-        }
-        catch { }
-        return FallbackScale(gdiDeviceName);
-    }
-
-    private static double FallbackScale(string gdiDeviceName)
-    {
-        try
-        {
-            for (uint i = 0; i < 16; i++)
-            {
-                var dd = DISPLAY_DEVICEW.Create();
-                if (!EnumDisplayDevicesW(null, i, ref dd, 0)) break;
-                if (!string.Equals(dd.DeviceName, gdiDeviceName, StringComparison.OrdinalIgnoreCase)) continue;
-                return 100;
             }
         }
         catch { }

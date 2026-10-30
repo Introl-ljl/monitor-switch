@@ -23,6 +23,10 @@ public sealed class SettingsService
 
     public AppSettings Current { get; private set; } = new();
 
+    /// <summary>
+    /// Update 必须在 UI 线程调用：SettingsChanged 在调用者线程同步触发，
+    /// 订阅方（App.OnSettingsChanged）会触碰 WPF 资源字典与窗口标题。
+    /// </summary>
     public event Action? SettingsChanged;
 
     public void Load()
