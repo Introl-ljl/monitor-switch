@@ -119,7 +119,7 @@ public static class CliHost
         }
     }
 
-    private static CliRequest Parse(string[] args)
+    internal static CliRequest Parse(string[] args)
     {
         var req = new CliRequest();
         foreach (var a in args)
@@ -273,15 +273,33 @@ public static class CliHost
 
         if (req.Json) return Ok(data: data);
 
-        int width = Math.Min(28, profiles.Max(p => p.Name.Length));
+        int width = Math.Min(28, profiles.Max(p => DisplayWidth(p.Name)));
         var lines = new List<string>();
         foreach (var p in profiles)
         {
             var marker = currentIds.Contains(p.Id) ? "*" : " ";
             var hotkey = string.IsNullOrWhiteSpace(p.Hotkey) ? "-" : p.Hotkey;
-            lines.Add($"{marker} {p.Name.PadRight(width)}  {p.Summary}  [{hotkey}]");
+            lines.Add($"{marker} {PadDisplay(p.Name, width)}  {p.Summary}  [{hotkey}]");
         }
         return Ok(string.Join(Environment.NewLine, lines), data);
+    }
+
+    /// <summary>终端列对齐按显示宽度：CJK 全角字符按 2 列计，避免中文模板名错位。</summary>
+    internal static int DisplayWidth(string s) =>
+        s.Sum(ch => ch >= 0x1100 && (
+            ch <= 0x115F ||                          // Hangul Jamo
+            (ch >= 0x2E80 && ch <= 0xA4CF) ||        // CJK 部首/符号/音节
+            (ch >= 0xAC00 && ch <= 0xD7A3) ||        // Hangul 音节
+            (ch >= 0xF900 && ch <= 0xFAFF) ||        // CJK 兼容表意
+            (ch >= 0xFE30 && ch <= 0xFE4F) ||        // CJK 兼容形式
+            (ch >= 0xFF00 && ch <= 0xFF60) ||        // 全角形式
+            (ch >= 0xFFE0 && ch <= 0xFFE6))          // 全角符号
+            ? 2 : 1);
+
+    private static string PadDisplay(string s, int width)
+    {
+        int pad = width - DisplayWidth(s);
+        return pad <= 0 ? s : s + new string(' ', pad);
     }
 
     private static async Task<CliResponse> CmdApplyAsync(CliRequest req, bool relayed)
@@ -650,6 +668,9 @@ public static class CliHost
                 break;
             case "language":
                 OnUi(() => settings.Update(s => s.Language = NormalizeLanguage(key, value)));
+                // 直连模式下本进程没有 SettingsChanged 订阅者，主动应用一次，
+                // 让这条命令自己的回显与后续输出使用新语言（中继模式由宿主应用，幂等）
+                Localization.Instance.Apply(settings.Current.Language);
                 break;
             case "start-minimized":
                 OnUi(() => settings.Update(s => s.StartMinimized = ParseBool(key, value)));
@@ -733,7 +754,7 @@ public static class CliHost
     // ---------------------------------------------------------------- 值解析
 
     /// <summary>把 [key, value, key, value…] 展开成键值对列表。</summary>
-    private static List<(string Key, string Value)> ParsePairs(List<string> args)
+    internal static List<(string Key, string Value)> ParsePairs(List<string> args)
     {
         if ((args.Count - 1) % 2 != 0)
             throw new CliUsageException(Strings.F("Cli.Err.MissingArg", "value"));
@@ -758,7 +779,7 @@ public static class CliHost
         return matches.Count == 1 ? matches[0] : null;
     }
 
-    private static uint ParseRotation(string value) =>
+    internal static uint ParseRotation(string value) =>
         value.ToLowerInvariant() switch
         {
             "0" or "landscape" => 1,
@@ -768,7 +789,7 @@ public static class CliHost
             _ => throw new CliUsageException(Strings.F("Cli.Set.BadValue", "rotation", value)),
         };
 
-    private static (uint W, uint H) ParseSize(string value)
+    internal static (uint W, uint H) ParseSize(string value)
     {
         var parts = value.Split('x', 'X', '*', '×', ',');
         if (parts.Length == 2
@@ -778,7 +799,7 @@ public static class CliHost
         throw new CliUsageException(Strings.F("Cli.Set.BadValue", "resolution", value));
     }
 
-    private static (uint Num, uint Den, double Hz) ParseRefresh(string value)
+    internal static (uint Num, uint Den, double Hz) ParseRefresh(string value)
     {
         if (!double.TryParse(value, System.Globalization.CultureInfo.InvariantCulture, out var hz)
             || hz <= 0 || hz >= 500)
@@ -789,7 +810,7 @@ public static class CliHost
         return ((uint)Math.Round(hz * 1000), 1000, hz);
     }
 
-    private static (int X, int Y) ParsePosition(string value)
+    internal static (int X, int Y) ParsePosition(string value)
     {
         var parts = value.Split(',', 'x', 'X', '*');
         if (parts.Length == 2
@@ -799,7 +820,7 @@ public static class CliHost
         throw new CliUsageException(Strings.F("Cli.Set.BadValue", "position", value));
     }
 
-    private static bool ParseBool(string key, string value) =>
+    internal static bool ParseBool(string key, string value) =>
         value.ToLowerInvariant() switch
         {
             "on" or "true" or "1" or "yes" or "enable" or "enabled" => true,
